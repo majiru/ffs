@@ -27,7 +27,7 @@ func (f *File) Stat(name string) (os.FileInfo){
 	return &Stat{f, name}
 }
 
-func createFile(content []byte, mode os.FileMode) ffs.File{
+func CreateFile(content []byte, mode os.FileMode) ffs.File{
 	return &File{bytes.NewReader(content), mode, time.Now()}
 }
 
@@ -82,7 +82,7 @@ func (d *Dir) Readdir(n int) ([]os.FileInfo, error) {
 	return fi, err
 }
 
-func createDir(files ...os.FileInfo) *Dir {
+func CreateDir(files ...os.FileInfo) *Dir {
 	c := make(chan os.FileInfo, 256)
 	go func() {
 		for _, i := range files {
