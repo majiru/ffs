@@ -1,4 +1,4 @@
-package ffs
+package server
 
 import (
 	"net/http"
@@ -13,13 +13,13 @@ import (
 )
 
 type Server struct {
-	fs ffs.Fs
+	FS ffs.Fs
 }
 
 func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestedFile := r.URL.Path
 	requestedFile = filepath.Join("/", filepath.FromSlash(path.Clean("/"+requestedFile)))
-	file, err := srv.fs.Read(requestedFile)
+	file, err := srv.FS.Read(requestedFile)
 	if err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		if err == os.ErrNotExist {
@@ -29,7 +29,7 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", 500)
 		return
 	}
-	fi, _ := srv.fs.Stat(requestedFile)
+	fi, _ := srv.FS.Stat(requestedFile)
 	http.ServeContent(w, r, requestedFile, fi.ModTime(), file)
 	return
 }
@@ -37,7 +37,7 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (srv Server) Serve9P( s *styx.Session){
 	for s.Next() {
 		msg := s.Request()
-		fi, err := srv.fs.Stat(msg.Path())
+		fi, err := srv.FS.Stat(msg.Path())
 		if err != nil {
 			msg.Rerror(os.ErrNotExist.Error())
 		}
@@ -46,10 +46,10 @@ func (srv Server) Serve9P( s *styx.Session){
 			t.Rwalk(fi, nil)
 		case styx.Topen:
 			if fi.IsDir() {
-				files, err := srv.fs.ReadDir(msg.Path())
+				files, err := srv.FS.ReadDir(msg.Path())
 				t.Ropen(fsutil.CreateDir(files...), err)
 			} else {
-				t.Ropen(srv.fs.Read(msg.Path()))
+				t.Ropen(srv.FS.Read(msg.Path()))
 			}
 		case styx.Tstat:
 			t.Rstat(fi, nil)
