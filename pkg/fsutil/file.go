@@ -4,7 +4,6 @@ import (
 	"os"
 	"io"
 	"time"
-	"github.com/majiru/ffs"
 	"bytes"
 )
 
@@ -21,14 +20,14 @@ type File struct{
 	Time time.Time
 }
 
-func (f *File) Close() error { return nil }
+func (f File) Close() error { return nil }
 
 func (f *File) Stat(name string) (os.FileInfo){
 	return &Stat{f, name}
 }
 
-func CreateFile(content []byte, mode os.FileMode) ffs.File{
-	return &File{bytes.NewReader(content), mode, time.Now()}
+func CreateFile(content []byte, mode os.FileMode) File{
+	return File{bytes.NewReader(content), mode, time.Now()}
 }
 
 type Stat struct {
