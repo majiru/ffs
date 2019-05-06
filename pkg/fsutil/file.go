@@ -79,13 +79,6 @@ func (d *Dir) Readdir(n int) ([]os.FileInfo, error) {
 	return d.files[start:d.i], nil
 }
 
-func (d *Dir) Reset() error {
-	d.i = 0
-	return nil
-}
-
 func (d Dir) Stat() (os.FileInfo, error) {
 	return d.Stats, nil
 }
-
-func(d *Dir) Close() error { return nil }

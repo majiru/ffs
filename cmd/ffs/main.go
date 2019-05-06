@@ -17,7 +17,8 @@ type chrisfs struct {
 }
 
 func (fs chrisfs) ReadDir(path string) (ffs.Dir, error) {
-	return fs.root, nil
+	dir := *fs.root
+	return &dir, nil
 }
 
 func (fs chrisfs) Read(path string) (ffs.File, error) {

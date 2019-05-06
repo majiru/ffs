@@ -15,7 +15,6 @@ type File interface {
 
 type Dir interface {
 	Readdir(n int) ([]os.FileInfo, error)
-	Reset() error
 	Stat() (os.FileInfo, error)
 }
 
