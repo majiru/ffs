@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"time"
-	"log"
 )
 
 type Stat struct {
@@ -63,7 +62,6 @@ func CreateDir(name string, files ...os.FileInfo) *Dir {
 }
 
 func (d *Dir) Readdir(n int) ([]os.FileInfo, error) {
-	log.Println(n, " ", d.i)
 	if n <= 0 {
 		return d.files, nil
 	}
