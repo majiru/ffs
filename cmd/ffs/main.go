@@ -48,10 +48,11 @@ func main() {
 
 	m := make(map[string]ffs.Fs)
 	m["localhost"] = &chrisfs{file, dir}
+	dfs := &domainfs.Domainfs{m}
 
-	srv := server.Server{ &domainfs.Domainfs{m} }
+	srv := server.Server{ dfs }
 	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
 	styxServer.Addr = ":564"
-	go http.ListenAndServe(":80", srv)
+	go http.ListenAndServe(":80", dfs)
 	log.Fatal(styxServer.ListenAndServe())
 }
