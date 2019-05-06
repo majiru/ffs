@@ -63,7 +63,7 @@ func (fs Domainfs) ReadDir(path string) (ffs.Dir, error) {
 	return child.ReadDir(file)
 }
 
-func (fs Domainfs) Read(path string) (ffs.File, error) {
+func (fs Domainfs) Read(path string) (interface{}, error) {
 	child, file, err := fs.path2fs(path)
 	if err != nil {
 		return nil, err
@@ -80,8 +80,9 @@ func (fs *Domainfs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := child.Read(requestedFile)
-	if err != nil {
+	file, err := child.Read(requestedFile)
+	content, ok := file.(ffs.File)
+	if !ok || err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		if err == os.ErrNotExist {
 			http.NotFoundHandler().ServeHTTP(w, r)

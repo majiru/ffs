@@ -13,13 +13,20 @@ type File interface {
 	Stat() (os.FileInfo, error)
 }
 
+type Writer interface {
+	File
+	io.Writer
+	io.WriterAt
+	Truncate(size int64) (error)
+}
+
 type Dir interface {
 	Readdir(n int) ([]os.FileInfo, error)
 	Stat() (os.FileInfo, error)
 }
 
 type Fs interface {
-	Read(path string) (File, error)
+	Read(path string) (interface{}, error)
 	ReadDir(path string) (Dir, error)
 	Stat(path string) (os.FileInfo, error)
 }

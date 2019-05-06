@@ -1,10 +1,10 @@
 package fsutil
 
 import (
-	"bytes"
 	"io"
 	"os"
 	"time"
+	"errors"
 )
 
 type Stat struct {
@@ -26,25 +26,112 @@ func (s Stat) IsDir() bool { return s.perm.IsDir() }
 
 func (s Stat) Size() int64 { return s.size }
 
-type filedata interface {
-	io.Reader
-	io.ReaderAt
-	io.Seeker
-}
-
 type File struct {
-	filedata
+	s []byte
+	i int64
 	Stats *Stat
 }
 
-func (f File) Close() error { return nil }
+func (f *File) Grow(n int64) {
+	if(int64(cap(f.s)) >= n) {
+		return
+	}
+	new := make([]byte, n)
+	copy(new, f.s)
+	f.s = new
+	return
+}
+
+func (f *File) Write(b []byte) (n int, err error) {
+	f.Grow(int64(len(b)) + f.i)
+	n = copy(f.s[f.i:], b)
+	if n < len(b) {
+		return 0, errors.New("fsutil.File.Write: Bad Copy")
+	}
+	f.i += int64(n)
+	return
+}
+
+func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, errors.New("fsutil.File.WriteAt: negative offset")
+	}
+	f.Grow(int64(len(b)) + off)
+	n = copy(f.s[off:], b)
+	if n < len(b) {
+		return 0, errors.New("fsutil.File.WriteAt: Bad Copy")
+	}
+	return
+}
+
+func (f *File) Read(b []byte) (n int, err error) {
+	if f.i >= int64(len(f.s)) {
+		return 0, io.EOF
+	}
+	n = copy(b, f.s[f.i:])
+	f.i += int64(n)
+	return
+}
+
+func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
+	// cannot modify state - see io.ReaderAt
+	if off < 0 {
+		return 0, errors.New("fsutil.File.ReadAt: negative offset")
+	}
+	if off >= int64(len(f.s)) {
+		return 0, io.EOF
+	}
+	n = copy(b, f.s[off:])
+	if n < len(b) {
+		err = io.EOF
+	}
+	return
+}
+
+func (f *File) Seek(offset int64, whence int) (int64, error) {
+	var abs int64
+	switch whence {
+	case io.SeekStart:
+		abs = offset
+	case io.SeekCurrent:
+		abs = f.i + offset
+	case io.SeekEnd:
+		abs = int64(len(f.s)) + offset
+	default:
+		return 0, errors.New("fsutil.File.Seek: invalid whence")
+	}
+	if abs < 0 {
+		return 0, errors.New("fsutil.File.Seek: negative position")
+	}
+	f.i = abs
+	return abs, nil
+}
+
+func (f *File) Close() error {
+	f.i = 0
+	return nil
+}
 
 func (f File) Stat() (os.FileInfo, error) {
 	return f.Stats, nil
 }
 
+func (f *File) Truncate(size int64) error {
+	if size > int64(cap(f.s)) {
+		f.Grow(size)
+		return nil
+	}
+	new := make([]byte, size)
+	n := copy(new, f.s[:size])
+	if int64(n) != size {
+		return errors.New("fsutil.File.Truncate: Bad Copy")
+	}
+	f.s = new
+	return nil
+}
+
 func CreateFile(content []byte, mode os.FileMode, name string) *File {
-	f := File{bytes.NewReader(content), nil}
+	f := File{content, int64(len(content)), nil}
 	f.Stats = &Stat{mode, name, time.Now(), 0, f}
 	return &f
 }
@@ -57,7 +144,7 @@ type Dir struct {
 
 func CreateDir(name string, files ...os.FileInfo) *Dir {
 	d := Dir{files, 0, nil}
-	d.Stats = &Stat{os.ModeDir, name, time.Now(), 0, nil}
+	d.Stats = &Stat{os.ModeDir | 0777, name, time.Now(), 0, nil}
 	return &d
 }
 

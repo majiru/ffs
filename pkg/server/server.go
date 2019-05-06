@@ -6,6 +6,8 @@ import (
 	"path"
 	"path/filepath"
 	"log"
+	"io"
+	"errors"
 	
 	"github.com/majiru/ffs"
 	"aqwari.net/net/styx"
@@ -19,7 +21,8 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestedFile := r.URL.Path
 	requestedFile = filepath.Join("/", filepath.FromSlash(path.Clean("/"+requestedFile)))
 	file, err := srv.FS.Read(requestedFile)
-	if err != nil {
+	content, ok := file.(ffs.File)
+	if !ok || err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		if err == os.ErrNotExist {
 			http.NotFoundHandler().ServeHTTP(w, r)
@@ -33,7 +36,7 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFoundHandler().ServeHTTP(w, r)
 		return
 	}
-	http.ServeContent(w, r, requestedFile, fi.ModTime(), file)
+	http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
 	return
 }
 
@@ -54,10 +57,37 @@ func (srv Server) Serve9P( s *styx.Session){
 				files, e := srv.FS.ReadDir(msg.Path())
 				t.Ropen(files, e)
 			} else {
-				t.Ropen(srv.FS.Read(msg.Path()))
+				file, err := srv.FS.Read(msg.Path())
+				w, ok := file.(ffs.Writer)
+				if t.Flag & os.O_TRUNC != 0 {
+					if !ok {
+						t.Ropen(nil, errors.New("Not Supported"))
+						continue
+					}
+					if truncerr := w.Truncate(1); truncerr != nil {
+						t.Ropen(nil, truncerr)
+						continue
+					}
+				}
+				if t.Flag & os.O_APPEND != 0 {
+					//BUG: O_APPEND is never set
+					if !ok {
+						t.Ropen(nil, errors.New("Not Supported"))
+						continue
+					}
+					if _, seekerr := w.Seek(-1, io.SeekEnd); seekerr != nil {
+						t.Ropen(nil, seekerr)
+						continue
+					}
+				}
+				t.Ropen(file, err)
 			}
 		case styx.Tstat:
 			t.Rstat(fi, nil)
+		case styx.Ttruncate:
+			if w, ok := fi.Sys().(ffs.Writer); ok {
+				t.Rtruncate(w.Truncate(t.Size))
+			}
 		}
 	}
 }

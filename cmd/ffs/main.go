@@ -13,7 +13,7 @@ import (
 
 
 type chrisfs struct {
-	file *fsutil.File
+	file ffs.Writer
 	root *fsutil.Dir
 }
 
@@ -22,7 +22,7 @@ func (fs chrisfs) ReadDir(path string) (ffs.Dir, error) {
 	return &dir, nil
 }
 
-func (fs chrisfs) Read(path string) (ffs.File, error) {
+func (fs chrisfs) Read(path string) (interface{}, error) {
 	return fs.file, nil
 }
 
@@ -47,7 +47,7 @@ func main() {
 	dir := fsutil.CreateDir("/", fi)
 
 	m := make(map[string]ffs.Fs)
-	m["localhost"] = &chrisfs{file, dir}
+	m["192.168.0.20"] = &chrisfs{file, dir}
 	dfs := &domainfs.Domainfs{m}
 
 	srv := server.Server{ dfs }
