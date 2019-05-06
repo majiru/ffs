@@ -82,3 +82,7 @@ func (d *Dir) Readdir(n int) ([]os.FileInfo, error) {
 func (d Dir) Stat() (os.FileInfo, error) {
 	return d.Stats, nil
 }
+
+func (d *Dir) Append(files ...os.FileInfo) {
+	d.files = append(d.files, files...)
+}
