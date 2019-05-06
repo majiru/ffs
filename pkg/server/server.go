@@ -8,7 +8,6 @@ import (
 	"log"
 	
 	"github.com/majiru/ffs"
-	"github.com/majiru/ffs/pkg/fsutil"
 	"aqwari.net/net/styx"
 )
 
@@ -39,15 +38,18 @@ func (srv Server) Serve9P( s *styx.Session){
 		msg := s.Request()
 		fi, err := srv.FS.Stat(msg.Path())
 		if err != nil {
+			log.Println(err.Error())
 			msg.Rerror(os.ErrNotExist.Error())
+			continue
 		}
 		switch t := msg.(type) {
 		case styx.Twalk:
 			t.Rwalk(fi, nil)
 		case styx.Topen:
 			if fi.IsDir() {
-				files, err := srv.FS.ReadDir(msg.Path())
-				t.Ropen(fsutil.CreateDir(files...), err)
+				files, e := srv.FS.ReadDir(msg.Path())
+				files.Reset()
+				t.Ropen(files, e)
 			} else {
 				t.Ropen(srv.FS.Read(msg.Path()))
 			}

@@ -1,12 +1,31 @@
 package fsutil
 
 import (
-	"os"
-	"io"
-	"time"
 	"bytes"
+	"io"
+	"os"
+	"time"
+	"log"
 )
 
+type Stat struct {
+	perm os.FileMode
+	name string
+	time time.Time
+	size int64
+	file interface{}
+}
+
+func (s Stat) Name() string     { return s.name }
+func (s Stat) Sys() interface{} { return s.file }
+
+func (s Stat) ModTime() time.Time { return s.time }
+
+func (s Stat) Mode() os.FileMode { return s.perm }
+
+func (s Stat) IsDir() bool { return s.perm.IsDir() }
+
+func (s Stat) Size() int64 { return s.size }
 
 type filedata interface {
 	io.Reader
@@ -14,80 +33,59 @@ type filedata interface {
 	io.Seeker
 }
 
-type File struct{
+type File struct {
 	filedata
-	Perm os.FileMode
-	Time time.Time
+	Stats *Stat
 }
 
 func (f File) Close() error { return nil }
 
-func (f *File) Stat(name string) (os.FileInfo){
-	return &Stat{f, name}
+func (f File) Stat() (os.FileInfo, error) {
+	return f.Stats, nil
 }
 
-func CreateFile(content []byte, mode os.FileMode) File{
-	return File{bytes.NewReader(content), mode, time.Now()}
-}
-
-type Stat struct {
-	File *File
-	name string
-}
-
-func (s Stat) Name() string     { return s.name }
-func (s Stat) Sys() interface{} { return s.File }
-
-func (s Stat) ModTime() time.Time {
-	return s.File.Time
-}
-
-func (s Stat) Mode() os.FileMode {
-	return s.File.Perm
-}
-
-func (s Stat) IsDir() bool {
-	return s.File.Perm.IsDir()
-}
-
-func (s Stat) Size() (int64) {
-	size, err := s.File.Seek(0, io.SeekEnd)
-	if err != nil {
-		return 0
-	}
-
-	_, err = s.File.Seek(0, io.SeekStart)
-	if err != nil {
-		return 0
-	}
-	return size
+func CreateFile(content []byte, mode os.FileMode, name string) *File {
+	f := File{bytes.NewReader(content), nil}
+	f.Stats = &Stat{mode, name, time.Now(), 0, f}
+	return &f
 }
 
 type Dir struct {
-	c chan os.FileInfo
+	files []os.FileInfo
+	i     int
+	Stats *Stat
+}
+
+func CreateDir(name string, files ...os.FileInfo) *Dir {
+	d := Dir{files, 0, nil}
+	d.Stats = &Stat{os.ModeDir, name, time.Now(), 0, nil}
+	return &d
 }
 
 func (d *Dir) Readdir(n int) ([]os.FileInfo, error) {
-	var err error
-	fi := make([]os.FileInfo, 0, 256)
-	for i := 0; i < n; i++ {
-		s, ok := <-d.c
-		if !ok {
-			err = io.EOF
-			break
-		}
-		fi = append(fi, s)
+	log.Println(n, " ", d.i)
+	if n <= 0 {
+		return d.files, nil
 	}
-	return fi, err
+	if d.i >= len(d.files) {
+		return nil, io.EOF
+	}
+	start := d.i
+	if len(d.files) > d.i+n {
+		d.i += n
+	} else {
+		d.i = len(d.files)
+	}
+	return d.files[start:d.i], nil
 }
 
-func CreateDir(files ...os.FileInfo) *Dir {
-	c := make(chan os.FileInfo, 256)
-	go func() {
-		for _, i := range files {
-			c <- i
-		}
-		close(c)
-	}()
-	return &Dir{c}
+func (d *Dir) Reset() error {
+	d.i = 0
+	return nil
 }
+
+func (d Dir) Stat() (os.FileInfo, error) {
+	return d.Stats, nil
+}
+
+func(d *Dir) Close() error { return nil }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
@@ -11,24 +12,40 @@ import (
 
 
 type chrisfs struct {
-	root fsutil.File
+	file *fsutil.File
+	root *fsutil.Dir
 }
 
-func (fs chrisfs) ReadDir(path string) ([]os.FileInfo, error) {
-	return []os.FileInfo{fs.root.Stat("index.html")}, nil
-}
-
-func (fs chrisfs) Read(path string) (ffs.File, error) {
+func (fs chrisfs) ReadDir(path string) (ffs.Dir, error) {
 	return fs.root, nil
 }
 
+func (fs chrisfs) Read(path string) (ffs.File, error) {
+	return fs.file, nil
+}
+
 func (fs chrisfs) Stat(path string) (os.FileInfo, error) {
-	return fs.root.Stat("index.html"), nil
+	switch(path){
+	case "/":
+		return fs.root.Stat()
+	case "/index.html":
+		return fs.file.Stat()
+	}
+
+	log.Println(path, " not found")
+	return nil, os.ErrNotExist
 }
 
 func main() {
-	fs := chrisfs{fsutil.CreateFile([]byte("Hello World!\n"), 0777)}
-	srv := server.Server{ fs }
+	var styxServer styx.Server
+	styxServer.TraceLog = log.New(os.Stderr, "", 0)
+	styxServer.ErrorLog = log.New(os.Stderr, "", 0)
+	file := fsutil.CreateFile([]byte("Hello World!\n"), 0777, "index.html")
+	fi, _ := file.Stat()
+	dir := fsutil.CreateDir("/", fi)
+	srv := server.Server{ &chrisfs{file, dir} }
+	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
+	styxServer.Addr = ":564"
 	go http.ListenAndServe(":80", srv)
-	styx.ListenAndServe(":564", styx.HandlerFunc(srv.Serve9P))
+	log.Fatal(styxServer.ListenAndServe())
 }
