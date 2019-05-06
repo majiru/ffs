@@ -5,6 +5,7 @@ import (
 	"os"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
+	"github.com/majiru/ffs/fs/domainfs"
 	"aqwari.net/net/styx"
 	"github.com/majiru/ffs"
 	"net/http"
@@ -44,7 +45,11 @@ func main() {
 	file := fsutil.CreateFile([]byte("Hello World!\n"), 0777, "index.html")
 	fi, _ := file.Stat()
 	dir := fsutil.CreateDir("/", fi)
-	srv := server.Server{ &chrisfs{file, dir} }
+
+	m := make(map[string]ffs.Fs)
+	m["localhost"] = &chrisfs{file, dir}
+
+	srv := server.Server{ &domainfs.Domainfs{m} }
 	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
 	styxServer.Addr = ":564"
 	go http.ListenAndServe(":80", srv)
