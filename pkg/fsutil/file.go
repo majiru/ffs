@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 	"errors"
+	"log"
 )
 
 type Stat struct {
@@ -24,13 +25,22 @@ func (s Stat) Mode() os.FileMode { return s.perm }
 
 func (s Stat) IsDir() bool { return s.perm.IsDir() }
 
-func (s Stat) Size() int64 { return s.size }
+func (s Stat) Size() int64 {
+	if f, ok := s.file.(interface{ Size() int64 }); ok {
+		return f.Size()
+	}else {
+		log.Println("fsutil.Stat.Size: Warning: Falling back to initial(probably wrong) size")
+	}
+	return s.size
+}
 
 type File struct {
 	s []byte
 	i int64
 	Stats *Stat
 }
+
+func (f File) Size() int64 { return int64(len(f.s)) }
 
 func (f *File) Grow(n int64) {
 	if(int64(cap(f.s)) >= n) {
@@ -132,7 +142,7 @@ func (f *File) Truncate(size int64) error {
 
 func CreateFile(content []byte, mode os.FileMode, name string) *File {
 	f := File{content, int64(len(content)), nil}
-	f.Stats = &Stat{mode, name, time.Now(), 0, f}
+	f.Stats = &Stat{mode, name, time.Now(), int64(len(content)), &f}
 	return &f
 }
 

@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"log"
-	"io"
 	"errors"
 	
 	"github.com/majiru/ffs"
@@ -58,25 +57,14 @@ func (srv Server) Serve9P( s *styx.Session){
 				t.Ropen(files, e)
 			} else {
 				file, err := srv.FS.Read(msg.Path())
-				w, ok := file.(ffs.Writer)
 				if t.Flag & os.O_TRUNC != 0 {
+					w, ok := file.(ffs.Writer)
 					if !ok {
 						t.Ropen(nil, errors.New("Not Supported"))
 						continue
 					}
 					if truncerr := w.Truncate(1); truncerr != nil {
 						t.Ropen(nil, truncerr)
-						continue
-					}
-				}
-				if t.Flag & os.O_APPEND != 0 {
-					//BUG: O_APPEND is never set
-					if !ok {
-						t.Ropen(nil, errors.New("Not Supported"))
-						continue
-					}
-					if _, seekerr := w.Seek(-1, io.SeekEnd); seekerr != nil {
-						t.Ropen(nil, seekerr)
 						continue
 					}
 				}
