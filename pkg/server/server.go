@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"log"
-	"errors"
 	"io"
 	
 	"github.com/majiru/ffs"
@@ -14,11 +13,11 @@ import (
 )
 
 type Server struct {
-	FS ffs.Fs
+	Fs ffs.Fs
 }
 
 func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) (content ffs.File, err error){
-	file, err := srv.FS.Read(path)
+	file, err := srv.Fs.Open(path, os.O_RDONLY)
 	content, ok := file.(ffs.File)
 	if !ok || err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
@@ -33,7 +32,7 @@ func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) 
 }
 
 func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string) (writer ffs.File, err error){
-	file, err := srv.FS.Read(path)
+	file, err := srv.Fs.Open(path, os.O_RDWR)
 	content, ok := file.(ffs.Writer)
 	if !ok || err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
@@ -62,7 +61,7 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestedFile := r.URL.Path
 	requestedFile = filepath.Join("/", filepath.FromSlash(path.Clean("/"+requestedFile)))
-	fi, err := srv.FS.Stat(requestedFile)
+	fi, err := srv.Fs.Stat(requestedFile)
 	if err != nil {
 		http.NotFoundHandler().ServeHTTP(w, r)
 		return
@@ -85,7 +84,7 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (srv Server) Serve9P( s *styx.Session){
 	for s.Next() {
 		msg := s.Request()
-		fi, err := srv.FS.Stat(msg.Path())
+		fi, err := srv.Fs.Stat(msg.Path())
 		if err != nil {
 			log.Println(err.Error())
 			msg.Rerror(os.ErrNotExist.Error())
@@ -96,22 +95,9 @@ func (srv Server) Serve9P( s *styx.Session){
 			t.Rwalk(fi, nil)
 		case styx.Topen:
 			if fi.IsDir() {
-				files, e := srv.FS.ReadDir(msg.Path())
-				t.Ropen(files, e)
+				t.Ropen(srv.Fs.ReadDir(msg.Path()))
 			} else {
-				file, err := srv.FS.Read(msg.Path())
-				if t.Flag & os.O_TRUNC != 0 {
-					w, ok := file.(ffs.Writer)
-					if !ok {
-						t.Ropen(nil, errors.New("Not Supported"))
-						continue
-					}
-					if truncerr := w.Truncate(1); truncerr != nil {
-						t.Ropen(nil, truncerr)
-						continue
-					}
-				}
-				t.Ropen(file, err)
+				t.Ropen(srv.Fs.Open(msg.Path(), t.Flag))
 			}
 		case styx.Tstat:
 			t.Rstat(fi, nil)

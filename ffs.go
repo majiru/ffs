@@ -26,7 +26,7 @@ type Dir interface {
 }
 
 type Fs interface {
-	Read(path string) (interface{}, error)
+	Open(path string, mode int) (interface{}, error)
 	ReadDir(path string) (Dir, error)
 	Stat(path string) (os.FileInfo, error)
 }

@@ -61,12 +61,12 @@ func (fs Domainfs) ReadDir(path string) (ffs.Dir, error) {
 	return child.ReadDir(file)
 }
 
-func (fs Domainfs) Read(path string) (interface{}, error) {
+func (fs Domainfs) Open(path string, mode int) (interface{}, error) {
 	child, file, err := fs.path2fs(path)
 	if err != nil {
 		return nil, err
 	}
-	return child.Read(file)
+	return child.Open(file, mode)
 }
 
 func (fs *Domainfs) ServeHTTP(w http.ResponseWriter, r *http.Request) {

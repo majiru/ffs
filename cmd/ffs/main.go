@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"os"
+	"io"
+	"errors"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
 	"github.com/majiru/ffs/fs/domainfs"
@@ -22,7 +24,13 @@ func (fs chrisfs) ReadDir(path string) (ffs.Dir, error) {
 	return &dir, nil
 }
 
-func (fs chrisfs) Read(path string) (interface{}, error) {
+func (fs chrisfs) Open(path string, mode int) (interface{}, error) {
+	if mode & os.O_TRUNC != 0 {
+		if err := fs.file.Truncate(1); err != nil {
+			return nil, errors.New("chrisfs.Open: Truncate Failed")
+		}
+		fs.file.Seek(0, io.SeekStart)
+	}
 	return fs.file, nil
 }
 
