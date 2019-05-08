@@ -181,3 +181,12 @@ func (d Dir) Stat() (os.FileInfo, error) {
 func (d *Dir) Append(files ...os.FileInfo) {
 	d.files = append(d.files, files...)
 }
+
+func (d *Dir) Find(name string) (os.FileInfo, error) {
+	for _, dir := range d.files {
+		if dir.Name() == name {
+			return dir, nil
+		}
+	}
+	return nil, os.ErrNotExist
+}

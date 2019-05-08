@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/majiru/ffs"
 	"github.com/majiru/ffs/fs/domainfs"
+	"github.com/majiru/ffs/fs/pastefs"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
 	"io"
@@ -54,7 +55,8 @@ func main() {
 	dir := fsutil.CreateDir("/", fi)
 
 	m := make(map[string]ffs.Fs)
-	m["192.168.0.20"] = &chrisfs{file, dir}
+	m["172.0.0.1"] = &chrisfs{file, dir}
+	m["localhost"] = pastefs.NewPastefs()
 	dfs := &domainfs.Domainfs{m}
 
 	srv := server.Server{dfs}
