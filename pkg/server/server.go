@@ -32,7 +32,7 @@ func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) 
 }
 
 func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string) (writer ffs.File, err error){
-	file, err := srv.Fs.Open(path, os.O_RDWR)
+	file, err := srv.Fs.Open(path, os.O_RDWR | os.O_TRUNC)
 	content, ok := file.(ffs.Writer)
 	if !ok || err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
@@ -46,12 +46,6 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 	if r.Body == nil {
 		return
 	}
-	//POSTs truncate for now, this should probably be changed
-	if err = content.Truncate(1); err != nil {
-		http.Error(w, "Internal server error", 500)
-		return
-	}
-	content.Seek(0, io.SeekStart)
 	io.Copy(content, r.Body)
 	//Don't expect POSTS to end in new line
 	content.Write([]byte("\n"))
