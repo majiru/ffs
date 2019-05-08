@@ -3,12 +3,10 @@ package domainfs
 import (
 	"github.com/majiru/ffs"
 	"github.com/majiru/ffs/pkg/fsutil"
+	"github.com/majiru/ffs/pkg/server"
 	"strings"
 	"os"
-	"log"
 	"net/http"
-	"path/filepath"
-	"path"
 )
 
 func map2dir(m map[string]ffs.Fs) ffs.Dir {
@@ -72,31 +70,12 @@ func (fs Domainfs) Read(path string) (interface{}, error) {
 }
 
 func (fs *Domainfs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	requestedFile := r.URL.Path
-	requestedFile = filepath.Join("/", filepath.FromSlash(path.Clean("/"+requestedFile)))
 	child, _, err := fs.path2fs("/" + r.Host)
 	if err != nil {
 		http.NotFoundHandler().ServeHTTP(w, r)
 		return
 	}
 
-	file, err := child.Read(requestedFile)
-	content, ok := file.(ffs.File)
-	if !ok || err != nil {
-		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
-		if err == os.ErrNotExist {
-			http.NotFoundHandler().ServeHTTP(w, r)
-			return
-		}
-		http.Error(w, "Internal server error", 500)
-		return
-	}
-
-	fi, err := child.Stat(requestedFile)
-	if err != nil {
-		http.NotFoundHandler().ServeHTTP(w, r)
-		return
-	}
-	http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
+	server.Server{ child }.ServeHTTP(w, r)
 	return
 }
