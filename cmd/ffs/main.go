@@ -1,18 +1,17 @@
 package main
 
 import (
-	"log"
-	"os"
-	"io"
+	"aqwari.net/net/styx"
 	"errors"
+	"github.com/majiru/ffs"
+	"github.com/majiru/ffs/fs/domainfs"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
-	"github.com/majiru/ffs/fs/domainfs"
-	"aqwari.net/net/styx"
-	"github.com/majiru/ffs"
+	"io"
+	"log"
 	"net/http"
+	"os"
 )
-
 
 type chrisfs struct {
 	file ffs.Writer
@@ -25,7 +24,7 @@ func (fs chrisfs) ReadDir(path string) (ffs.Dir, error) {
 }
 
 func (fs chrisfs) Open(path string, mode int) (interface{}, error) {
-	if mode & os.O_TRUNC != 0 {
+	if mode&os.O_TRUNC != 0 {
 		if err := fs.file.Truncate(1); err != nil {
 			return nil, errors.New("chrisfs.Open: Truncate Failed")
 		}
@@ -35,7 +34,7 @@ func (fs chrisfs) Open(path string, mode int) (interface{}, error) {
 }
 
 func (fs chrisfs) Stat(path string) (os.FileInfo, error) {
-	switch(path){
+	switch path {
 	case "/":
 		return fs.root.Stat()
 	case "/index.html":
@@ -58,7 +57,7 @@ func main() {
 	m["192.168.0.20"] = &chrisfs{file, dir}
 	dfs := &domainfs.Domainfs{m}
 
-	srv := server.Server{ dfs }
+	srv := server.Server{dfs}
 	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
 	styxServer.Addr = ":564"
 	go http.ListenAndServe(":80", dfs)

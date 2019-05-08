@@ -4,9 +4,9 @@ import (
 	"github.com/majiru/ffs"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
-	"strings"
-	"os"
 	"net/http"
+	"os"
+	"strings"
 )
 
 func map2dir(m map[string]ffs.Fs) ffs.Dir {
@@ -26,7 +26,7 @@ type Domainfs struct {
 
 func (fs *Domainfs) path2fs(path string) (ffs.Fs, string, error) {
 	paths := strings.Split(path, "/")
-	if(len(paths) < 2){
+	if len(paths) < 2 {
 		return nil, "", os.ErrNotExist
 	}
 
@@ -40,7 +40,7 @@ func (fs *Domainfs) path2fs(path string) (ffs.Fs, string, error) {
 }
 
 func (fs Domainfs) Stat(path string) (os.FileInfo, error) {
-	if(path == "/") {
+	if path == "/" {
 		return map2dir(fs.Domains).Stat()
 	}
 	child, file, err := fs.path2fs(path)
@@ -51,7 +51,7 @@ func (fs Domainfs) Stat(path string) (os.FileInfo, error) {
 }
 
 func (fs Domainfs) ReadDir(path string) (ffs.Dir, error) {
-	if(path == "/") {
+	if path == "/" {
 		return map2dir(fs.Domains), nil
 	}
 	child, file, err := fs.path2fs(path)
@@ -76,6 +76,6 @@ func (fs *Domainfs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server.Server{ child }.ServeHTTP(w, r)
+	server.Server{child}.ServeHTTP(w, r)
 	return
 }

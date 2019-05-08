@@ -17,7 +17,7 @@ type Writer interface {
 	File
 	io.Writer
 	io.WriterAt
-	Truncate(size int64) (error)
+	Truncate(size int64) error
 }
 
 type Dir interface {

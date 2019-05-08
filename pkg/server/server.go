@@ -1,22 +1,22 @@
 package server
 
 import (
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
-	"log"
-	"io"
-	
-	"github.com/majiru/ffs"
+
 	"aqwari.net/net/styx"
+	"github.com/majiru/ffs"
 )
 
 type Server struct {
 	Fs ffs.Fs
 }
 
-func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) (content ffs.File, err error){
+func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) (content ffs.File, err error) {
 	file, err := srv.Fs.Open(path, os.O_RDONLY)
 	content, ok := file.(ffs.File)
 	if !ok || err != nil {
@@ -31,8 +31,8 @@ func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) 
 	return
 }
 
-func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string) (writer ffs.File, err error){
-	file, err := srv.Fs.Open(path, os.O_RDWR | os.O_TRUNC)
+func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string) (writer ffs.File, err error) {
+	file, err := srv.Fs.Open(path, os.O_RDWR|os.O_TRUNC)
 	content, ok := file.(ffs.Writer)
 	if !ok || err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
@@ -75,7 +75,7 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (srv Server) Serve9P( s *styx.Session){
+func (srv Server) Serve9P(s *styx.Session) {
 	for s.Next() {
 		msg := s.Request()
 		fi, err := srv.Fs.Stat(msg.Path())

@@ -1,11 +1,11 @@
 package fsutil
 
 import (
+	"errors"
 	"io"
+	"log"
 	"os"
 	"time"
-	"errors"
-	"log"
 )
 
 type Stat struct {
@@ -28,22 +28,22 @@ func (s Stat) IsDir() bool { return s.perm.IsDir() }
 func (s Stat) Size() int64 {
 	if f, ok := s.file.(interface{ Size() int64 }); ok {
 		return f.Size()
-	}else {
+	} else {
 		log.Println("fsutil.Stat.Size: Warning: Falling back to initial(probably wrong) size")
 	}
 	return s.size
 }
 
 type File struct {
-	s []byte
-	i int64
+	s     []byte
+	i     int64
 	Stats *Stat
 }
 
 func (f File) Size() int64 { return int64(len(f.s)) }
 
 func (f *File) Grow(n int64) {
-	if(int64(cap(f.s)) >= n) {
+	if int64(cap(f.s)) >= n {
 		return
 	}
 	new := make([]byte, n)
