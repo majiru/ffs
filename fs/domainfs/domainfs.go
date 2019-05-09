@@ -39,7 +39,7 @@ func (fs *Domainfs) path2fs(path string) (ffs.Fs, string, error) {
 	return child, file, nil
 }
 
-func (fs Domainfs) Stat(path string) (os.FileInfo, error) {
+func (fs *Domainfs) Stat(path string) (os.FileInfo, error) {
 	if path == "/" {
 		return map2dir(fs.Domains).Stat()
 	}
@@ -50,7 +50,7 @@ func (fs Domainfs) Stat(path string) (os.FileInfo, error) {
 	return child.Stat(file)
 }
 
-func (fs Domainfs) ReadDir(path string) (ffs.Dir, error) {
+func (fs *Domainfs) ReadDir(path string) (ffs.Dir, error) {
 	if path == "/" {
 		return map2dir(fs.Domains), nil
 	}
@@ -61,7 +61,7 @@ func (fs Domainfs) ReadDir(path string) (ffs.Dir, error) {
 	return child.ReadDir(file)
 }
 
-func (fs Domainfs) Open(path string, mode int) (interface{}, error) {
+func (fs *Domainfs) Open(path string, mode int) (interface{}, error) {
 	child, file, err := fs.path2fs(path)
 	if err != nil {
 		return nil, err

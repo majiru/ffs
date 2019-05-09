@@ -33,7 +33,7 @@ func (fs *Pastefs) root() ffs.Dir {
 	return fsutil.CreateDir("/", d, fi)
 }
 
-func (fs Pastefs) Stat(file string) (os.FileInfo, error) {
+func (fs *Pastefs) Stat(file string) (os.FileInfo, error) {
 	if file == "/" {
 		return fs.root().Stat()
 	}
@@ -47,7 +47,7 @@ func (fs Pastefs) Stat(file string) (os.FileInfo, error) {
 	return fs.pastes.Find(path.Base(file))
 }
 
-func (fs Pastefs) ReadDir(path string) (ffs.Dir, error) {
+func (fs *Pastefs) ReadDir(path string) (ffs.Dir, error) {
 	if path == "/" {
 		return fs.root(), nil
 	} else if path == "/pastes" {
@@ -58,7 +58,7 @@ func (fs Pastefs) ReadDir(path string) (ffs.Dir, error) {
 	return nil, os.ErrNotExist
 }
 
-func (fs Pastefs) Open(file string, mode int) (interface{}, error) {
+func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
 	if file == "/index.html" {
 		f := fsutil.CreateFile([]byte(""), 0644, "/index.html")
 		err := dir2html(f, fs.pastes)

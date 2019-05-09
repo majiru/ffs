@@ -19,12 +19,12 @@ type chrisfs struct {
 	root *fsutil.Dir
 }
 
-func (fs chrisfs) ReadDir(path string) (ffs.Dir, error) {
+func (fs *chrisfs) ReadDir(path string) (ffs.Dir, error) {
 	dir := *fs.root
 	return &dir, nil
 }
 
-func (fs chrisfs) Open(path string, mode int) (interface{}, error) {
+func (fs *chrisfs) Open(path string, mode int) (interface{}, error) {
 	if mode&os.O_TRUNC != 0 {
 		if err := fs.file.Truncate(1); err != nil {
 			return nil, errors.New("chrisfs.Open: Truncate Failed")
@@ -34,7 +34,7 @@ func (fs chrisfs) Open(path string, mode int) (interface{}, error) {
 	return fs.file, nil
 }
 
-func (fs chrisfs) Stat(path string) (os.FileInfo, error) {
+func (fs *chrisfs) Stat(path string) (os.FileInfo, error) {
 	switch path {
 	case "/":
 		return fs.root.Stat()
@@ -55,7 +55,7 @@ func main() {
 	dir := fsutil.CreateDir("/", fi)
 
 	m := make(map[string]ffs.Fs)
-	m["172.0.0.1"] = &chrisfs{file, dir}
+	m["127.0.0.1"] = &chrisfs{file, dir}
 	m["localhost"] = pastefs.NewPastefs()
 	dfs := &domainfs.Domainfs{m}
 
