@@ -190,3 +190,9 @@ func (d *Dir) Find(name string) (os.FileInfo, error) {
 	}
 	return nil, os.ErrNotExist
 }
+
+func (d *Dir) Dup() (out []os.FileInfo) {
+	out = make([]os.FileInfo, len(d.files))
+	copy(out, d.files)
+	return
+}
