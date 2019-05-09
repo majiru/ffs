@@ -65,13 +65,11 @@ func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
 		return f, err
 	}
 	if file == "/new" {
-		if mode&os.O_RDWR != 0 || mode&os.O_WRONLY != 0 {
-			name := strconv.FormatInt(time.Now().Unix(), 10)
-			f := fsutil.CreateFile([]byte(""), 0777, name)
-			fi, _ := f.Stat()
-			fs.pastes.Append(fi)
-			return f, nil
-		}
+		name := strconv.FormatInt(time.Now().Unix(), 10)
+		f := fsutil.CreateFile([]byte(""), 0777, name)
+		fi, _ := f.Stat()
+		fs.pastes.Append(fi)
+		return f, nil
 	}
 	if f, err := fs.pastes.Find(path.Base(file)); err == nil {
 		return f.Sys(), nil
