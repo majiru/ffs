@@ -154,7 +154,7 @@ type Dir struct {
 
 func CreateDir(name string, files ...os.FileInfo) *Dir {
 	d := Dir{files, 0, nil}
-	d.Stats = &Stat{os.ModeDir | 0777, name, time.Now(), 0, nil}
+	d.Stats = &Stat{os.ModeDir | 0777, name, time.Now(), 0, &d}
 	return &d
 }
 
