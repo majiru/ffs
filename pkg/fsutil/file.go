@@ -3,8 +3,8 @@ package fsutil
 import (
 	"errors"
 	"io"
-	"log"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -28,33 +28,34 @@ func (s Stat) IsDir() bool { return s.perm.IsDir() }
 func (s Stat) Size() int64 {
 	if f, ok := s.file.(interface{ Size() int64 }); ok {
 		return f.Size()
-	} else {
-		log.Println("fsutil.Stat.Size: Warning: Falling back to initial(probably wrong) size")
 	}
 	return s.size
 }
 
 type File struct {
-	s     []byte
+	*sync.RWMutex
+	s     *[]byte
 	i     int64
 	Stats *Stat
 }
 
-func (f File) Size() int64 { return int64(len(f.s)) }
+func (f File) Size() int64 { return int64(len(*f.s)) }
 
 func (f *File) Grow(n int64) {
-	if int64(cap(f.s)) >= n {
+	if int64(cap(*f.s)) >= n {
 		return
 	}
 	new := make([]byte, n)
-	copy(new, f.s)
-	f.s = new
+	copy(new, *f.s)
+	*f.s = new
 	return
 }
 
 func (f *File) Write(b []byte) (n int, err error) {
+	f.Lock()
+	defer f.Unlock()
 	f.Grow(int64(len(b)) + f.i)
-	n = copy(f.s[f.i:], b)
+	n = copy((*f.s)[f.i:], b)
 	if n < len(b) {
 		return 0, errors.New("fsutil.File.Write: Bad Copy")
 	}
@@ -63,11 +64,13 @@ func (f *File) Write(b []byte) (n int, err error) {
 }
 
 func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
+	f.Lock()
+	defer f.Unlock()
 	if off < 0 {
 		return 0, errors.New("fsutil.File.WriteAt: negative offset")
 	}
 	f.Grow(int64(len(b)) + off)
-	n = copy(f.s[off:], b)
+	n = copy((*f.s)[off:], b)
 	if n < len(b) {
 		return 0, errors.New("fsutil.File.WriteAt: Bad Copy")
 	}
@@ -75,23 +78,27 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 }
 
 func (f *File) Read(b []byte) (n int, err error) {
-	if f.i >= int64(len(f.s)) {
+	f.RLock()
+	defer f.RUnlock()
+	if f.i >= int64(len(*f.s)) {
 		return 0, io.EOF
 	}
-	n = copy(b, f.s[f.i:])
+	n = copy(b, (*f.s)[f.i:])
 	f.i += int64(n)
 	return
 }
 
 func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
+	f.RLock()
+	defer f.RUnlock()
 	// cannot modify state - see io.ReaderAt
 	if off < 0 {
 		return 0, errors.New("fsutil.File.ReadAt: negative offset")
 	}
-	if off >= int64(len(f.s)) {
+	if off >= int64(len(*f.s)) {
 		return 0, io.EOF
 	}
-	n = copy(b, f.s[off:])
+	n = copy(b, (*f.s)[off:])
 	if n < len(b) {
 		err = io.EOF
 	}
@@ -99,6 +106,7 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 }
 
 func (f *File) Seek(offset int64, whence int) (int64, error) {
+	//Each instance of a File has its own seekpos
 	var abs int64
 	switch whence {
 	case io.SeekStart:
@@ -106,7 +114,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekCurrent:
 		abs = f.i + offset
 	case io.SeekEnd:
-		abs = int64(len(f.s)) + offset
+		abs = int64(len(*f.s)) + offset
 	default:
 		return 0, errors.New("fsutil.File.Seek: invalid whence")
 	}
@@ -127,21 +135,30 @@ func (f File) Stat() (os.FileInfo, error) {
 }
 
 func (f *File) Truncate(size int64) error {
-	if size > int64(cap(f.s)) {
+	f.Lock()
+	defer f.Unlock()
+	if size > int64(cap(*f.s)) {
 		f.Grow(size)
 		return nil
 	}
 	new := make([]byte, size)
-	n := copy(new, f.s[:size])
+	n := copy(new, (*f.s)[:size])
 	if int64(n) != size {
 		return errors.New("fsutil.File.Truncate: Bad Copy")
 	}
-	f.s = new
+	*f.s = new
 	return nil
 }
 
+//Dup creates a new File pointer
+//The new File pointer retains everything except seek position
+func (f *File) Dup() *File {
+	new := *f
+	return &new
+}
+
 func CreateFile(content []byte, mode os.FileMode, name string) *File {
-	f := File{content, int64(len(content)), nil}
+	f := File{&sync.RWMutex{}, &content, int64(len(content)), nil}
 	f.Stats = &Stat{mode, name, time.Now(), int64(len(content)), &f}
 	return &f
 }
@@ -191,8 +208,14 @@ func (d *Dir) Find(name string) (os.FileInfo, error) {
 	return nil, os.ErrNotExist
 }
 
-func (d *Dir) Dup() (out []os.FileInfo) {
+func (d *Dir) Copy() (out []os.FileInfo) {
 	out = make([]os.FileInfo, len(d.files))
 	copy(out, d.files)
 	return
+}
+
+//Dir contains no references, this duplicates all containing data
+func (d *Dir) Dup() *Dir {
+	new := *d
+	return &new
 }

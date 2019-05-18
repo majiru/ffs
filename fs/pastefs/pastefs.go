@@ -1,14 +1,15 @@
 package pastefs
 
 import (
-	"github.com/majiru/ffs"
-	"github.com/majiru/ffs/pkg/fsutil"
 	"html/template"
 	"io"
 	"os"
 	"path"
 	"strconv"
 	"time"
+
+	"github.com/majiru/ffs"
+	"github.com/majiru/ffs/pkg/fsutil"
 )
 
 type Pastefs struct {
@@ -17,7 +18,7 @@ type Pastefs struct {
 }
 
 func dir2html(w io.Writer, dir *fsutil.Dir) (err error) {
-	content := struct{ Files []os.FileInfo }{dir.Dup()}
+	content := struct{ Files []os.FileInfo }{dir.Copy()}
 	t := template.New("homepage")
 	t, err = t.Parse(homepage)
 	if err != nil {
@@ -51,8 +52,7 @@ func (fs *Pastefs) ReadDir(path string) (ffs.Dir, error) {
 	if path == "/" {
 		return fs.root(), nil
 	} else if path == "/pastes" {
-		d := *fs.pastes
-		return &d, nil
+		return fs.pastes.Dup(), nil
 	}
 
 	return nil, os.ErrNotExist
@@ -65,11 +65,14 @@ func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
 		return f, err
 	}
 	if file == "/new" {
-		name := strconv.FormatInt(time.Now().Unix(), 10)
-		f := fsutil.CreateFile([]byte(""), 0777, name)
-		fi, _ := f.Stat()
-		fs.pastes.Append(fi)
-		return f, nil
+		if mode&os.O_RDWR != 0 || mode&os.O_WRONLY != 0 || mode&os.O_TRUNC != 0 {
+			name := strconv.FormatInt(time.Now().Unix(), 10)
+			f := fsutil.CreateFile([]byte(""), 0777, name)
+			fi, _ := f.Stat()
+			fs.pastes.Append(fi)
+			return f, nil
+		}
+		return fs.newpaste.Dup(), nil
 	}
 	if f, err := fs.pastes.Find(path.Base(file)); err == nil {
 		return f.Sys(), nil
@@ -78,7 +81,7 @@ func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
 }
 
 func NewPastefs() *Pastefs {
-	return &Pastefs{fsutil.CreateFile([]byte("\n"), 0777, "new"), fsutil.CreateDir("pastes")}
+	return &Pastefs{fsutil.CreateFile([]byte("Write to this file to paste\n"), 0777, "new"), fsutil.CreateDir("pastes")}
 }
 
 const homepage = `
