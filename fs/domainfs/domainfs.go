@@ -1,36 +1,85 @@
 package domainfs
 
 import (
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+
 	"github.com/majiru/ffs"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
-	"net/http"
-	"os"
-	"strings"
 )
 
-func map2dir(m map[string]ffs.Fs) ffs.Dir {
+type Domainfs struct {
+	*sync.RWMutex
+	sub, dns []string
+	domains  map[string]ffs.Fs
+}
+
+func NewDomainfs() *Domainfs {
+	return &Domainfs{
+		&sync.RWMutex{},
+		[]string{},
+		[]string{},
+		make(map[string]ffs.Fs),
+	}
+}
+
+func (fs *Domainfs) Add(newfs ffs.Fs, names ...string) {
+	fs.Lock()
+	for _, n := range names {
+		fs.domains[n] = newfs
+	}
+	fs.Unlock()
+}
+
+func (fs *Domainfs) AddDNS(newfs ffs.Fs, names ...string) {
+	fs.Lock()
+	fs.dns = append(fs.dns, names...)
+	for _, n := range names {
+		fs.domains[n] = newfs
+		for _, s := range fs.sub {
+			fs.domains[s+"."+n] = newfs
+		}
+	}
+	fs.Unlock()
+}
+
+func (fs *Domainfs) AddSub(newfs ffs.Fs, names ...string) {
+	fs.Lock()
+	fs.sub = append(fs.sub, names...)
+	for _, n := range names {
+		for _, d := range fs.dns {
+			fs.domains[n+"."+d] = newfs
+		}
+	}
+	fs.Unlock()
+}
+
+func (fs *Domainfs) map2dir() ffs.Dir {
+	fs.RLock()
 	root := fsutil.CreateDir("/")
 
-	for k, _ := range m {
+	for k, _ := range fs.domains {
 		fi, _ := fsutil.CreateDir(k).Stat()
 		root.Append(fi)
 	}
 
+	fs.RUnlock()
 	return root
 }
 
-type Domainfs struct {
-	Domains map[string]ffs.Fs
-}
-
 func (fs *Domainfs) path2fs(path string) (ffs.Fs, string, error) {
+	fs.RLock()
+	defer fs.RUnlock()
 	paths := strings.Split(path, "/")
 	if len(paths) < 2 {
 		return nil, "", os.ErrNotExist
 	}
 
-	child := fs.Domains[paths[1]]
+	child := fs.domains[paths[1]]
 	if child == nil {
 		return nil, "", os.ErrNotExist
 	}
@@ -41,7 +90,7 @@ func (fs *Domainfs) path2fs(path string) (ffs.Fs, string, error) {
 
 func (fs *Domainfs) Stat(path string) (os.FileInfo, error) {
 	if path == "/" {
-		return map2dir(fs.Domains).Stat()
+		return fs.map2dir().Stat()
 	}
 	child, file, err := fs.path2fs(path)
 	if err != nil {
@@ -52,7 +101,7 @@ func (fs *Domainfs) Stat(path string) (os.FileInfo, error) {
 
 func (fs *Domainfs) ReadDir(path string) (ffs.Dir, error) {
 	if path == "/" {
-		return map2dir(fs.Domains), nil
+		return fs.map2dir(), nil
 	}
 	child, file, err := fs.path2fs(path)
 	if err != nil {
@@ -70,7 +119,9 @@ func (fs *Domainfs) Open(path string, mode int) (interface{}, error) {
 }
 
 func (fs *Domainfs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	child, _, err := fs.path2fs("/" + r.Host)
+	strip := regexp.MustCompile(`:[0-9]+`)
+	name := strip.ReplaceAllString(r.Host, "")
+	child, _, err := fs.path2fs("/" + name)
 	if err != nil {
 		http.NotFoundHandler().ServeHTTP(w, r)
 		return

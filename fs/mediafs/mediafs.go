@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	anidb "github.com/majiru/anidb2json"
 	"github.com/majiru/ffs"
@@ -16,15 +17,19 @@ import (
 )
 
 type Mediafs struct {
-	db *anidb.TitleDB
+	*sync.RWMutex
+	db                            *anidb.TitleDB
+	dbfile, homepage, refreshfile *fsutil.File
 }
 
 func (fs *Mediafs) root() (d *fsutil.Dir) {
 	d = fsutil.CreateDir("/")
+	fs.RLock()
 	for _, s := range fs.db.Anime {
 		fi, _ := fsutil.CreateDir(s.Name).Stat()
 		d.Append(fi)
 	}
+	fs.RUnlock()
 	return
 }
 
@@ -47,6 +52,8 @@ func (fs *Mediafs) child(root *fsutil.Dir, file string) (*fsutil.Dir, *anidb.Ani
 	}
 	dir = dir.Dup()
 	var ani *anidb.Anime
+	fs.RLock()
+	defer fs.RUnlock()
 	for i := range fs.db.Anime {
 		if fs.db.Anime[i].Name == child.Name() {
 			ani = fs.db.Anime[i]
@@ -72,24 +79,61 @@ func (fs *Mediafs) child(root *fsutil.Dir, file string) (*fsutil.Dir, *anidb.Ani
 	return dir, ani, nil
 }
 
+func FindUnion(name string, paths []string) (filepath string, siblings []os.FileInfo, err error) {
+	var (
+		fi       os.FileInfo
+		contents []os.FileInfo
+	)
+	for _, p := range paths {
+		fi, err = os.Stat(p)
+		if err != nil {
+			return
+		}
+		if fi.IsDir() {
+			contents, err = ioutil.ReadDir(p)
+			if err != nil {
+				return
+			}
+			siblings = append(siblings, contents...)
+			for _, fi := range contents {
+				if fi.Name() == name {
+					filepath = path.Join(p, fi.Name())
+				}
+			}
+		} else {
+			siblings = append(siblings, fi)
+			if fi.Name() == name {
+				filepath = path.Join(p, fi.Name())
+			}
+		}
+	}
+	return
+}
+
 func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
-	if strings.HasSuffix(file, "index.html") {
-		f := fsutil.CreateFile([]byte(""), 0644, "/index.html")
-		return f.Stat()
-	}
-	r := fs.root()
-	if file == "/" {
+	var r *fsutil.Dir
+	switch file {
+	case "/index.html":
+		return fs.homepage.Stat()
+	case "/db":
+		return fs.dbfile.Stat()
+	case "/refresh":
+		return fs.refreshfile.Stat()
+	case "/":
+		r = fs.root()
 		return r.Stat()
+	default:
+		r = fs.root()
+		c, _, err := fs.child(r, file)
+		if err != nil {
+			return nil, err
+		}
+		if strings.Count(file, "/") < 2 {
+			return c.Stat()
+		}
+		_, file = path.Split(file)
+		return c.Find(file)
 	}
-	c, _, err := fs.child(r, file)
-	if err != nil {
-		return nil, err
-	}
-	if strings.Count(file, "/") < 2 {
-		return c.Stat()
-	}
-	_, file = path.Split(file)
-	return c.Find(file)
 }
 
 func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
@@ -101,90 +145,80 @@ func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
 	return c, err
 }
 
-func findUnion(name string, paths []string) (*os.File, error) {
-	for _, p := range paths {
-		fi, err := os.Stat(p)
+func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
+	switch file {
+	case "/index.html":
+		return fs.homepage.Dup(), nil
+	case "/refresh":
+		err := fs.Update()
+		return fs.refreshfile.Dup(), err
+	case "/db":
+		return fs.dbfile.Dup(), nil
+	default:
+		_, ani, err := fs.child(fs.root(), file)
 		if err != nil {
 			return nil, err
 		}
-		if fi.IsDir() {
-			contents, err := ioutil.ReadDir(p)
-			if err != nil {
-				return nil, err
-			}
-			for _, fi := range contents {
-				if fi.Name() == name {
-					return os.Open(path.Join(p, fi.Name()))
-				}
-			}
+		_, name := path.Split(file)
+		if file, _, err := FindUnion(name, ani.Path); err == nil {
+			return os.OpenFile(file, os.O_RDONLY, 0755)
 		} else {
-			if fi.Name() == name {
-				return os.Open(p)
-			}
+			return nil, err
 		}
 	}
-	return nil, os.ErrNotExist
 }
 
-func (fs *Mediafs) homepage(w io.Writer) (err error) {
+func (fs *Mediafs) genHomepage() (err error) {
+	fs.Lock()
+	defer fs.Unlock()
 	t := template.New("homepage")
-	t.Funcs(template.FuncMap{"start": func(i, j int) bool { return i%j == 0 }})
-	t.Funcs(template.FuncMap{"stop": func(i, j int) bool { return i%j == (j - 1) }})
+	t.Funcs(template.FuncMap{
+		"files": func(paths []string) []os.FileInfo {
+			if _, fi, err := FindUnion("", paths); err == nil {
+				return fi
+			}
+			return nil
+		}})
 	t, err = t.Parse(homepagetemplate)
 	if err != nil {
 		return
 	}
-	err = t.ExecuteTemplate(w, "homepage", fs.db)
+	fs.homepage.Truncate(1)
+	fs.homepage.Seek(0, io.SeekStart)
+	err = t.ExecuteTemplate(fs.homepage, "homepage", fs.db)
 	return
 }
 
-func childpage(ani *anidb.Anime, fi []os.FileInfo, w io.Writer) (err error) {
-	content := struct {
-		Ani   *anidb.Anime
-		Files []os.FileInfo
-	}{
-		ani,
-		fi,
-	}
-	t := template.New("childpage")
-	t, err = t.Parse(seriespagetemplate)
+func (fs *Mediafs) Update() (err error) {
+	b, err := ioutil.ReadAll(fs.dbfile)
 	if err != nil {
 		return
 	}
-	err = t.ExecuteTemplate(w, "childpage", &content)
-	return
-}
-
-func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
-	if file == "/index.html" {
-		f := fsutil.CreateFile([]byte(""), 0644, "/index.html")
-		err := fs.homepage(f)
-		return f, err
-	}
-	child, ani, err := fs.child(fs.root(), file)
-	if err != nil {
-		return nil, err
-	}
-	if strings.HasSuffix(file, "index.html") {
-		fi, err := child.Readdir(0)
-		if err != nil {
-			return nil, err
-		}
-		f := fsutil.CreateFile([]byte(""), 0644, "/index.html")
-		err = childpage(ani, fi, f)
-		return f, err
-	}
-	_, name := path.Split(file)
-	return findUnion(name, ani.Path)
-}
-
-func NewMediafs(db io.Reader) (fs *Mediafs, err error) {
-	fs = &Mediafs{&anidb.TitleDB{}}
-	b, err := ioutil.ReadAll(db)
-	if err != nil {
-		return
-	}
+	fs.dbfile.Seek(0, io.SeekStart)
+	fs.Lock()
 	err = json.Unmarshal(b, fs.db)
+	fs.Unlock()
+	err = fs.genHomepage()
+	log.Println("Done updating")
+	return
+}
+
+func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
+	fs = &Mediafs{
+		&sync.RWMutex{},
+		&anidb.TitleDB{},
+		fsutil.CreateFile([]byte(""), 0644, "db"),
+		fsutil.CreateFile([]byte(""), 0644, "index.html"),
+		fsutil.CreateFile([]byte("Processed refresh"), 0644, "refresh"),
+	}
+	if db != nil {
+		_, err = io.Copy(fs.dbfile, db)
+		if err != nil {
+			return
+		}
+		fs.dbfile.Seek(0, io.SeekStart)
+		err = fs.Update()
+	}
 	return
 }
 
@@ -195,46 +229,41 @@ const homepagetemplate = `
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+		<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
 		<title>mediafs</title>
 	</head>
-	<body style="background-color:#FFFFEA">
-		{{range $index, $s := .Anime}}
-		{{if start $index 3}}<div class="row">{{end}}
-			<div class="col">
-				<div class="thumbnail">
-      				<a href="/{{$s.Name}}/index.html">
-						<img src="https://img7-us.anidb.net/pics/anime/{{$s.Picture}}">
-						<div class="caption" >
-							<p>{{$s.Name}}</p>
-						</div>
-					</a>
+	<body style="background-color:#777777">
+			<div class="container card-columns">
+			{{range $ani := .Anime}}
+				<div class="card" style="background-color:#FFFFEA">
+					<img class="card-img-top" src="https://img7-us.anidb.net/pics/anime/{{$ani.Picture}}" alt="{{$ani.Name}}" style="width:%10">
+					<div class="card-body">
+						<h5 class="card-title">{{$ani.Name}}</h5>
+						<p class="card-text">{{$ani.Description}}</p>
+						<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}">Episodes</a>
+					</div>
 				</div>
-			</div>
-		{{if stop $index 3}}</div>{{end}}
-		{{end}}
-	</body>
-</html>
-`
-
-const seriespagetemplate = `
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-		<title>{{.Ani.Name}}</title>
-	</head>
-	<body style="background-color:#FFFFEA; color:black">
-		<div class="d-flex">
-			<div class="p-2 flex-fill"><img src="https://img7-us.anidb.net/pics/anime/{{.Ani.Picture}}"></div>
-			<div class="p-2 flex-fill">{{.Ani.Description}}</div>
-		</div>
-		<div class="d-flex flex-column mb-3">
-  			{{range .Files}}
-				<a href="{{.Name}}">{{.Name}}</a>
+				<div class="modal fade" id="Modal{{.ID}}" tabindex="-1" role="dialog" aria-labelledby="Modal{{.ID}}Label" aria-hidden="true">
+					<div class="modal-dialog">
+					<div class="modal-content">
+					<div class="modal-body">
+					<center>
+					<div class="list-group">
+					{{with files $ani.Path}}
+					{{range .}}
+					<a href="/{{$ani.Name}}/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
+					{{end}}
+					{{end}}
+					<center>
+					</div>
+					</div>
+					</div>
+					</div>
+				</div>
 			{{end}}
-		</div>
+			</div>
 	</body>
 </html>
 `
