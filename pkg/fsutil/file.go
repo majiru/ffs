@@ -54,6 +54,7 @@ func (f *File) Grow(n int64) {
 func (f *File) Write(b []byte) (n int, err error) {
 	f.Lock()
 	defer f.Unlock()
+	f.Stats.time = time.Now()
 	f.Grow(int64(len(b)) + f.i)
 	n = copy((*f.s)[f.i:], b)
 	if n < len(b) {
@@ -64,11 +65,12 @@ func (f *File) Write(b []byte) (n int, err error) {
 }
 
 func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
-	f.Lock()
-	defer f.Unlock()
 	if off < 0 {
 		return 0, errors.New("fsutil.File.WriteAt: negative offset")
 	}
+	f.Lock()
+	defer f.Unlock()
+	f.Stats.time = time.Now()
 	f.Grow(int64(len(b)) + off)
 	n = copy((*f.s)[off:], b)
 	if n < len(b) {
