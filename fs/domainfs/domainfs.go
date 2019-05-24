@@ -1,7 +1,11 @@
 package domainfs
 
 import (
+	"context"
+	"crypto/tls"
+	"fmt"
 	"net/http"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -10,6 +14,7 @@ import (
 	"github.com/majiru/ffs"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/majiru/ffs/pkg/server"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 type Domainfs struct {
@@ -123,10 +128,43 @@ func (fs *Domainfs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	name := strip.ReplaceAllString(r.Host, "")
 	child, _, err := fs.path2fs("/" + name)
 	if err != nil {
+		log.Println(err)
 		http.NotFoundHandler().ServeHTTP(w, r)
 		return
 	}
 
 	server.Server{child}.ServeHTTP(w, r)
+	return
+}
+
+func (fs *Domainfs) hostPolicy(ctx context.Context, host string) error {
+	fs.RLock()
+	for k := range fs.domains {
+		if host == k {
+			return nil
+		}
+	}
+	return fmt.Errorf("domainfs.hostPolicy: Host %s is not authorized")
+}
+
+func (fs *Domainfs) HTTPSServer(httpsport, httpport string) (srv *http.Server) {
+	m := &autocert.Manager{
+		Prompt: autocert.AcceptTOS,
+		HostPolicy: fs.hostPolicy,
+		Cache: autocert.DirCache("."),
+	}
+	srv = &http.Server{Addr: httpsport, Handler: fs}
+	srv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
+
+	//HTTP for redirection and letsencrypt callback api
+	httpSrv := &http.Server{Addr: httpport}
+	redir := func(w http.ResponseWriter, r *http.Request) {
+		target := "https://" + r.Host + r.URL.String()
+		http.Redirect(w, r, target, http.StatusFound)
+	}
+	mux := &http.ServeMux{}
+	mux.HandleFunc("/", redir)
+	httpSrv.Handler = m.HTTPHandler(mux)
+	go httpSrv.ListenAndServe()
 	return
 }

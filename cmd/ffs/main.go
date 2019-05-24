@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"aqwari.net/net/styx"
@@ -16,12 +15,13 @@ import (
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Printf("Usage %s: http_port 9p_port [domains...]\n", os.Args[0])
+		fmt.Printf("Usage %s: http_port https_port 9p_port [domains...]\n", os.Args[0])
 		os.Exit(1)
 	}
 	porthttp := ":" + os.Args[1]
-	port9p := ":" + os.Args[2]
-	os.Args = os.Args[3:]
+	porthttps := ":" + os.Args[2]
+	port9p := ":" + os.Args[3]
+	os.Args = os.Args[4:]
 
 	var styxServer styx.Server
 	styxServer.TraceLog = log.New(os.Stderr, "", 0)
@@ -46,6 +46,7 @@ func main() {
 	srv := server.Server{domfs}
 	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
 	styxServer.Addr = port9p
-	go http.ListenAndServe(porthttp, domfs)
+	httpsSrv := domfs.HTTPSServer(porthttps, porthttp)
+	go httpsSrv.ListenAndServeTLS("", "")
 	log.Fatal(styxServer.ListenAndServe())
 }
