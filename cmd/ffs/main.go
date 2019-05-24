@@ -21,7 +21,7 @@ func main() {
 	}
 	porthttp := ":" + os.Args[1]
 	port9p := ":" + os.Args[2]
-	os.Args = os.Args[2:]
+	os.Args = os.Args[3:]
 
 	var styxServer styx.Server
 	styxServer.TraceLog = log.New(os.Stderr, "", 0)
