@@ -18,8 +18,8 @@ import (
 
 type Mediafs struct {
 	*sync.RWMutex
-	db                            *anidb.TitleDB
-	dbfile, homepage, refreshfile *fsutil.File
+	db               *anidb.TitleDB
+	dbfile, homepage *fsutil.File
 }
 
 func (fs *Mediafs) root() (d *fsutil.Dir) {
@@ -117,8 +117,6 @@ func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
 		return fs.homepage.Stat()
 	case "/db":
 		return fs.dbfile.Stat()
-	case "/refresh":
-		return fs.refreshfile.Stat()
 	case "/":
 		r = fs.root()
 		return r.Stat()
@@ -146,12 +144,15 @@ func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
 }
 
 func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
+	var err error
 	switch file {
 	case "/index.html":
-		return fs.homepage.Dup(), nil
-	case "/refresh":
-		err := fs.Update()
-		return fs.refreshfile.Dup(), err
+		db, _ := fs.dbfile.Stat()
+		hp, _ := fs.homepage.Stat()
+		if db.ModTime().After(hp.ModTime()) {
+			err = fs.Update()
+		}
+		return fs.homepage.Dup(), err
 	case "/db":
 		return fs.dbfile.Dup(), nil
 	default:
@@ -209,7 +210,6 @@ func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 		&anidb.TitleDB{},
 		fsutil.CreateFile([]byte(""), 0644, "db"),
 		fsutil.CreateFile([]byte(""), 0644, "index.html"),
-		fsutil.CreateFile([]byte("Processed refresh"), 0644, "refresh"),
 	}
 	if db != nil {
 		_, err = io.Copy(fs.dbfile, db)
