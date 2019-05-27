@@ -179,7 +179,8 @@ func (fs *Mediafs) genHomepage() (err error) {
 				return fi
 			}
 			return nil
-		}})
+		},
+	})
 	t, err = t.Parse(homepagetemplate)
 	if err != nil {
 		return
@@ -241,25 +242,28 @@ const homepagetemplate = `
 					<img class="card-img-top" src="https://img7-us.anidb.net/pics/anime/{{$ani.Picture}}" alt="{{$ani.Name}}" style="width:%10">
 					<div class="card-body">
 						<h5 class="card-title">{{$ani.Name}}</h5>
-						<p class="card-text">{{$ani.Description}}</p>
 						<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}">Episodes</a>
+						<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}Desc">Synopsis</a>
+					</div>
+				</div>
+				<div class="modal fade" id="Modal{{.ID}}Desc" tabindex="-1" role="dialog" aria-labelledby="Modal{{.ID}}Desc" aria-hidden="true">
+					<div class="modal-dialog modal-content modal-body">
+					<center>
+					<p>{{$ani.Description}}</p>
+					</center>
 					</div>
 				</div>
 				<div class="modal fade" id="Modal{{.ID}}" tabindex="-1" role="dialog" aria-labelledby="Modal{{.ID}}Label" aria-hidden="true">
-					<div class="modal-dialog">
-					<div class="modal-content">
-					<div class="modal-body">
-					<center>
-					<div class="list-group">
-					{{with files $ani.Path}}
-					{{range .}}
-					<a href="/{{$ani.Name}}/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
-					{{end}}
-					{{end}}
-					<center>
-					</div>
-					</div>
-					</div>
+					<div class="modal-dialog modal-content modal-body">
+						<center>
+						<div class="list-group">
+							{{- with files $ani.Path -}}
+							{{- range . -}}
+							<a href="/{{$ani.Name}}/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
+							{{- end -}}
+							{{- end -}}
+						</div>
+						</center>
 					</div>
 				</div>
 			{{end}}
