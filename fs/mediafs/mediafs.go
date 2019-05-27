@@ -161,7 +161,7 @@ func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
 		}
 		_, name := path.Split(file)
 		if file, _, err := FindUnion(name, ani.Path); err == nil {
-			return os.OpenFile(file, os.O_RDONLY, 0755)
+			return os.OpenFile(file, os.O_RDONLY, 0555)
 		} else {
 			return nil, err
 		}
