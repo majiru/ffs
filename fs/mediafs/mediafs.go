@@ -63,16 +63,7 @@ func (fs *Mediafs) child(root *fsutil.Dir, file string) (*fsutil.Dir, *anidb.Ani
 					log.Println("stat failed")
 					return nil, nil, err
 				}
-				if fi.IsDir() {
-					files, err := ioutil.ReadDir(p)
-					if err != nil {
-						log.Println("readdir failed")
-						return nil, nil, err
-					}
-					dir.Append(files...)
-				} else {
-					dir.Append(fi)
-				}
+				dir.Append(fi)
 			}
 		}
 	}
@@ -80,31 +71,15 @@ func (fs *Mediafs) child(root *fsutil.Dir, file string) (*fsutil.Dir, *anidb.Ani
 }
 
 func FindUnion(name string, paths []string) (filepath string, siblings []os.FileInfo, err error) {
-	var (
-		fi       os.FileInfo
-		contents []os.FileInfo
-	)
+	var fi os.FileInfo
 	for _, p := range paths {
 		fi, err = os.Stat(p)
 		if err != nil {
 			return
 		}
-		if fi.IsDir() {
-			contents, err = ioutil.ReadDir(p)
-			if err != nil {
-				return
-			}
-			siblings = append(siblings, contents...)
-			for _, fi := range contents {
-				if fi.Name() == name {
-					filepath = path.Join(p, fi.Name())
-				}
-			}
-		} else {
-			siblings = append(siblings, fi)
-			if fi.Name() == name {
-				filepath = path.Join(p, fi.Name())
-			}
+		siblings = append(siblings, fi)
+		if fi.Name() == name {
+			filepath = p
 		}
 	}
 	return
