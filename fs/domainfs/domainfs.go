@@ -144,7 +144,7 @@ func (fs *Domainfs) hostPolicy(ctx context.Context, host string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("domainfs.hostPolicy: Host %s is not authorized")
+	return fmt.Errorf("domainfs.hostPolicy: Host %s is not authorized", host)
 }
 
 func (fs *Domainfs) HTTPSServer(httpsport, httpport string) (srv *http.Server) {
