@@ -1,3 +1,4 @@
+//Package fsuitl implements in memory files and directories.
 package fsutil
 
 import (
@@ -8,6 +9,7 @@ import (
 	"time"
 )
 
+//Stat implements os.FileInfo
 type Stat struct {
 	perm os.FileMode
 	name string
@@ -32,6 +34,7 @@ func (s Stat) Size() int64 {
 	return s.size
 }
 
+//File represents an in memory file.
 type File struct {
 	*sync.RWMutex
 	s     *[]byte
@@ -159,18 +162,24 @@ func (f *File) Dup() *File {
 	return &new
 }
 
+//CreateFile creates a new File struct.
+//The underlying Stats.Sys() points to the new File.
 func CreateFile(content []byte, mode os.FileMode, name string) *File {
 	f := File{&sync.RWMutex{}, &content, int64(len(content)), nil}
 	f.Stats = &Stat{mode, name, time.Now(), int64(len(content)), &f}
 	return &f
 }
 
+
+//Dir represents an in memory Directory.
 type Dir struct {
 	files []os.FileInfo
 	i     int
 	Stats *Stat
 }
 
+//CreateDir creates a new Dir struct.
+//The underlying Stats.Sys() points to the new Dir.
 func CreateDir(name string, files ...os.FileInfo) *Dir {
 	d := Dir{files, 0, nil}
 	d.Stats = &Stat{os.ModeDir | 0777, name, time.Now(), 0, &d}
@@ -216,7 +225,7 @@ func (d *Dir) Copy() (out []os.FileInfo) {
 	return
 }
 
-//Dir contains no references, this duplicates all containing data
+//Dup creates a new Dir, duplicatin all contained data.
 func (d *Dir) Dup() *Dir {
 	new := *d
 	return &new
