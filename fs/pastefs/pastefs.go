@@ -4,7 +4,6 @@ import (
 	"html/template"
 	"io"
 	"os"
-	"path"
 	"strconv"
 	"time"
 
@@ -28,43 +27,39 @@ func dir2html(w io.Writer, dir *fsutil.Dir) (err error) {
 	return
 }
 
-func (fs *Pastefs) root() ffs.Dir {
+func (fs *Pastefs) root() *fsutil.Dir {
 	fi, _ := fs.newpaste.Stat()
 	d, _ := fs.pastes.Stat()
 	return fsutil.CreateDir("/", d, fi)
 }
 
 func (fs *Pastefs) Stat(file string) (os.FileInfo, error) {
-	if file == "/" {
+	switch file {
+	case "/":
 		return fs.root().Stat()
+	case "/index.html":
+		return fsutil.CreateFile([]byte(""), 0644, "/index.html").Stat()
+	default:
+		return fs.root().Walk(file)
 	}
-	if file == "/new" || file == "/index.html" {
-		return fs.newpaste.Stat()
-	}
-	if file == "/pastes" {
-		return fs.pastes.Stat()
-	}
-
-	return fs.pastes.Find(path.Base(file))
 }
 
 func (fs *Pastefs) ReadDir(path string) (ffs.Dir, error) {
-	if path == "/" {
+	switch path {
+	case "/":
 		return fs.root(), nil
-	} else if path == "/pastes" {
-		return fs.pastes.Dup(), nil
+	default:
+		return fs.root().WalkForDir(path)
 	}
-
-	return nil, os.ErrNotExist
 }
 
 func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
-	if file == "/index.html" {
+	switch file {
+	case "/index.html":
 		f := fsutil.CreateFile([]byte(""), 0644, "/index.html")
 		err := dir2html(f, fs.pastes)
 		return f, err
-	}
-	if file == "/new" {
+	case "/new":
 		if mode&os.O_RDWR != 0 || mode&os.O_WRONLY != 0 || mode&os.O_TRUNC != 0 {
 			name := strconv.FormatInt(time.Now().Unix(), 10)
 			f := fsutil.CreateFile([]byte(""), 0777, name)
@@ -73,11 +68,9 @@ func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
 			return f, nil
 		}
 		return fs.newpaste.Dup(), nil
+	default:
+		return fs.root().WalkForFile(file)
 	}
-	if f, err := fs.pastes.Find(path.Base(file)); err == nil {
-		return f.Sys(), nil
-	}
-	return nil, os.ErrNotExist
 }
 
 func NewPastefs() *Pastefs {
