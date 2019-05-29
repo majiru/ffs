@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"strings"
 	"sync"
 
 	anidb "github.com/majiru/anidb2json"
@@ -18,171 +17,15 @@ import (
 
 type Mediafs struct {
 	*sync.RWMutex
-	db               *anidb.TitleDB
+	Root             *fsutil.Dir
+	DB               *anidb.TitleDB
 	dbfile, homepage *fsutil.File
-}
-
-func (fs *Mediafs) root() (d *fsutil.Dir) {
-	d = fsutil.CreateDir("/")
-	fs.RLock()
-	for _, s := range fs.db.Anime {
-		fi, _ := fsutil.CreateDir(s.Name).Stat()
-		d.Append(fi)
-	}
-	fs.RUnlock()
-	return
-}
-
-func (fs *Mediafs) child(root *fsutil.Dir, file string) (*fsutil.Dir, *anidb.Anime, error) {
-	parts := strings.Split(file, "/")
-	plen := len(parts)
-	if plen < 2 || plen > 3 {
-		return nil, nil, os.ErrNotExist
-	}
-	log.Println(parts[1])
-	child, err := root.Find(parts[1])
-	if err != nil {
-		log.Println("find failed")
-		return nil, nil, err
-	}
-	dir, ok := child.Sys().(*fsutil.Dir)
-	if !ok {
-		log.Println("cast failed")
-		return nil, nil, os.ErrNotExist
-	}
-	dir = dir.Dup()
-	var ani *anidb.Anime
-	fs.RLock()
-	defer fs.RUnlock()
-	for i := range fs.db.Anime {
-		if fs.db.Anime[i].Name == child.Name() {
-			ani = fs.db.Anime[i]
-			for _, p := range fs.db.Anime[i].Path {
-				fi, err := os.Stat(p)
-				if err != nil {
-					log.Println("stat failed")
-					return nil, nil, err
-				}
-				dir.Append(fi)
-			}
-		}
-	}
-	return dir, ani, nil
-}
-
-func FindUnion(name string, paths []string) (filepath string, siblings []os.FileInfo, err error) {
-	var fi os.FileInfo
-	for _, p := range paths {
-		fi, err = os.Stat(p)
-		if err != nil {
-			return
-		}
-		siblings = append(siblings, fi)
-		if fi.Name() == name {
-			filepath = p
-		}
-	}
-	return
-}
-
-func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
-	var r *fsutil.Dir
-	switch file {
-	case "/index.html":
-		return fs.homepage.Stat()
-	case "/db":
-		return fs.dbfile.Stat()
-	case "/":
-		r = fs.root()
-		return r.Stat()
-	default:
-		r = fs.root()
-		c, _, err := fs.child(r, file)
-		if err != nil {
-			return nil, err
-		}
-		if strings.Count(file, "/") < 2 {
-			return c.Stat()
-		}
-		_, file = path.Split(file)
-		return c.Find(file)
-	}
-}
-
-func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
-	r := fs.root()
-	if path == "/" {
-		return r, nil
-	}
-	c, _, err := fs.child(r, path)
-	return c, err
-}
-
-func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
-	var err error
-	switch file {
-	case "/index.html":
-		db, _ := fs.dbfile.Stat()
-		hp, _ := fs.homepage.Stat()
-		if db.ModTime().After(hp.ModTime()) {
-			err = fs.Update()
-		}
-		return fs.homepage.Dup(), err
-	case "/db":
-		return fs.dbfile.Dup(), nil
-	default:
-		_, ani, err := fs.child(fs.root(), file)
-		if err != nil {
-			return nil, err
-		}
-		_, name := path.Split(file)
-		if file, _, err := FindUnion(name, ani.Path); err == nil {
-			return os.OpenFile(file, os.O_RDONLY, 0555)
-		} else {
-			return nil, err
-		}
-	}
-}
-
-func (fs *Mediafs) genHomepage() (err error) {
-	fs.Lock()
-	defer fs.Unlock()
-	t := template.New("homepage")
-	t.Funcs(template.FuncMap{
-		"files": func(paths []string) []os.FileInfo {
-			if _, fi, err := FindUnion("", paths); err == nil {
-				return fi
-			}
-			return nil
-		},
-	})
-	t, err = t.Parse(homepagetemplate)
-	if err != nil {
-		return
-	}
-	fs.homepage.Truncate(1)
-	fs.homepage.Seek(0, io.SeekStart)
-	err = t.ExecuteTemplate(fs.homepage, "homepage", fs.db)
-	return
-}
-
-func (fs *Mediafs) Update() (err error) {
-	b, err := ioutil.ReadAll(fs.dbfile)
-	if err != nil {
-		return
-	}
-	fs.dbfile.Seek(0, io.SeekStart)
-	fs.Lock()
-	err = json.Unmarshal(b, fs.db)
-	fs.Unlock()
-	err = fs.genHomepage()
-	log.Println("Done updating")
-	return
 }
 
 func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 	fs = &Mediafs{
 		&sync.RWMutex{},
+		fsutil.CreateDir("/"),
 		&anidb.TitleDB{},
 		fsutil.CreateFile([]byte(""), 0644, "db"),
 		fsutil.CreateFile([]byte(""), 0644, "index.html"),
@@ -193,9 +36,126 @@ func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 			return
 		}
 		fs.dbfile.Seek(0, io.SeekStart)
-		err = fs.Update()
+		err = fs.update()
 	}
 	return
+}
+
+func (fs *Mediafs) updateTree() {
+	fs.Lock()
+	fs.Root = fsutil.CreateDir("/")
+	for _, s := range fs.DB.Anime {
+		subdir := fsutil.CreateDir(s.Name)
+		for _, p := range s.Path {
+			subdir.Append(fsutil.CreateFile([]byte(p), 0644, path.Base(p)).Stats)
+		}
+		fs.Root.Append(subdir.Stats)
+	}
+	fs.Unlock()
+}
+
+func (fs *Mediafs) updateHomepage() (err error) {
+	fs.Lock()
+	defer fs.Unlock()
+	t := template.New("homepage")
+	t.Funcs(template.FuncMap{
+		"files": func(name string) []os.FileInfo {
+			if dir, err := fs.Root.WalkForDir(name); err == nil {
+				return dir.Copy()
+			}
+			return nil
+		},
+	})
+	t, err = t.Parse(homepagetemplate)
+	if err != nil {
+		return
+	}
+	fs.homepage.Truncate(1)
+	fs.homepage.Seek(0, io.SeekStart)
+	err = t.ExecuteTemplate(fs.homepage, "homepage", fs)
+	return
+}
+
+func (fs *Mediafs) updateDB() (err error) {
+	fs.Lock()
+	b, err := ioutil.ReadAll(fs.dbfile)
+	if err != nil {
+		return
+	}
+	fs.dbfile.Seek(0, io.SeekStart)
+	err = json.Unmarshal(b, fs.DB)
+	fs.Unlock()
+	return
+}
+
+func (fs *Mediafs) update() (err error) {
+	if err = fs.updateDB(); err != nil {
+		return
+	}
+	fs.updateTree()
+	return fs.updateHomepage()
+}
+
+func (fs *Mediafs) Check() (err error) {
+	if fs.dbfile.Stats.ModTime().After(fs.homepage.Stats.ModTime()) {
+		return fs.update()
+	}
+	return
+}
+
+func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
+	if err := fs.Check(); err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	switch file {
+	case "/index.html":
+		return fs.homepage.Stat()
+	case "/db":
+		return fs.dbfile.Stat()
+	case "/":
+		return fs.Root.Stat()
+	default:
+		return fs.Root.Walk(file)
+	}
+}
+
+func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
+	if err := fs.Check(); err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	switch path {
+	case "/":
+		return fs.Root.Dup(), nil
+	default:
+		return fs.Root.WalkForDir(path)
+	}
+}
+
+func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
+	if err := fs.Check(); err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	switch file {
+	case "/index.html":
+		return fs.homepage.Dup(), nil
+	case "/db":
+		return fs.dbfile.Dup(), nil
+	default:
+		if f, err := fs.Root.WalkForFile(file); err != nil {
+			return nil, err
+		} else {
+			//These files store the absolute path, not the file contents
+			f.Seek(0, io.SeekStart)
+			if b, err := ioutil.ReadAll(f); err != nil {
+				return nil, err
+			} else {
+				return os.OpenFile(string(b), os.O_RDONLY, 0555)
+			}
+		}
+	}
 }
 
 const homepagetemplate = `
@@ -212,7 +172,7 @@ const homepagetemplate = `
 	</head>
 	<body style="background-color:#777777">
 			<div class="container card-columns">
-			{{range $ani := .Anime}}
+			{{range $ani := .DB.Anime}}
 				<div class="card" style="background-color:#FFFFEA">
 					<img class="card-img-top" src="https://img7-us.anidb.net/pics/anime/{{$ani.Picture}}" alt="{{$ani.Name}}" style="width:%10">
 					<div class="card-body">
@@ -232,7 +192,7 @@ const homepagetemplate = `
 					<div class="modal-dialog modal-content modal-body">
 						<center>
 						<div class="list-group">
-							{{- with files $ani.Path -}}
+							{{- with files $ani.Name -}}
 							{{- range . -}}
 							<a href="/{{$ani.Name}}/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
 							{{- end -}}
