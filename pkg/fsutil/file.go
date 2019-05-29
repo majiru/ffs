@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -170,7 +171,6 @@ func CreateFile(content []byte, mode os.FileMode, name string) *File {
 	return &f
 }
 
-
 //Dir represents an in memory Directory.
 type Dir struct {
 	files []os.FileInfo
@@ -242,6 +242,62 @@ func search(target string, files []os.FileInfo) (os.FileInfo, error) {
 //recusrive descent is only possible if subdir is of type *Dir
 func (d *Dir) Search(name string) (os.FileInfo, error) {
 	return search(name, d.files)
+}
+
+func split(fpath string) (clean []string) {
+	//Using strings.Split has some drawbacks,
+	//but for the case in which we are using this for a service
+	//everthing is / delimited anyway
+	for _, parts := range strings.Split(fpath, "/") {
+		if parts != "" {
+			clean = append(clean, parts)
+		}
+	}
+	return
+}
+
+func (d *Dir) Walk(fpath string) (fi os.FileInfo, err error) {
+	parts := split(fpath)
+	if len(parts) == 0 {
+		return nil, os.ErrNotExist
+	}
+	if fi, err = d.Find(parts[0]); err != nil {
+		return
+	}
+	for _, part := range parts[1:] {
+		if subdir, ok := fi.Sys().(*Dir); !ok {
+			return nil, errors.New("fsutil.Dir.Walk: cast to Dir failed")
+		} else {
+			if fi, err = subdir.Find(part); err != nil {
+				return nil, os.ErrNotExist
+			}
+		}
+	}
+	return
+}
+
+func (d *Dir) WalkForFile(fpath string) (*File, error) {
+	if fi, err := d.Walk(fpath); err != nil {
+		return nil, err
+	} else {
+		if f, ok := fi.Sys().(*File); ok {
+			return f, nil
+		} else {
+			return nil, errors.New("fsutil.Dir.WalkForFile: cast to File Failed")
+		}
+	}
+}
+
+func (d *Dir) WalkForDir(fpath string) (*Dir, error) {
+	if fi, err := d.Walk(fpath); err != nil {
+		return nil, err
+	} else {
+		if d, ok := fi.Sys().(*Dir); ok {
+			return d, nil
+		} else {
+			return nil, errors.New("fsutil.Dir.WalkForFile: cast to Dir Failed")
+		}
+	}
 }
 
 //Copy duplicates the held file info slice to the caller.
