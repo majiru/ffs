@@ -210,6 +210,7 @@ func (d *Dir) Append(files ...os.FileInfo) {
 	d.files = append(d.files, files...)
 }
 
+//Find performs a 1 level deep search to find a file specified by name
 func (d *Dir) Find(name string) (os.FileInfo, error) {
 	for _, dir := range d.files {
 		if dir.Name() == name {
@@ -219,6 +220,31 @@ func (d *Dir) Find(name string) (os.FileInfo, error) {
 	return nil, os.ErrNotExist
 }
 
+func search(target string, files []os.FileInfo) (os.FileInfo, error) {
+	if len(files) == 0 {
+		return nil, os.ErrNotExist
+	}
+	fi := files[0]
+	if fi.Name() == target {
+		return fi, nil
+	}
+	if fi.IsDir() {
+		if dir, ok := fi.Sys().(*Dir); ok {
+			if match, err := search(target, dir.files); err == nil {
+				return match, nil
+			}
+		}
+	}
+	return search(target, files[1:])
+}
+
+//Search performs a recursive search into all subdirs looking for name.
+//recusrive descent is only possible if subdir is of type *Dir
+func (d *Dir) Search(name string) (os.FileInfo, error) {
+	return search(name, d.files)
+}
+
+//Copy duplicates the held file info slice to the caller.
 func (d *Dir) Copy() (out []os.FileInfo) {
 	out = make([]os.FileInfo, len(d.files))
 	copy(out, d.files)
