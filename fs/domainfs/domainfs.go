@@ -63,7 +63,7 @@ func (fs *Domainfs) AddSub(newfs ffs.Fs, names ...string) {
 	fs.Unlock()
 }
 
-func (fs *Domainfs) map2dir() ffs.Dir {
+func (fs *Domainfs) map2dir() *fsutil.Dir {
 	fs.RLock()
 	root := fsutil.CreateDir("/")
 
@@ -94,25 +94,29 @@ func (fs *Domainfs) path2fs(path string) (ffs.Fs, string, error) {
 }
 
 func (fs *Domainfs) Stat(path string) (os.FileInfo, error) {
-	if path == "/" {
+	switch path {
+	case "/":
 		return fs.map2dir().Stat()
+	default:
+		child, file, err := fs.path2fs(path)
+		if err != nil {
+			return nil, err
+		}
+		return child.Stat(file)
 	}
-	child, file, err := fs.path2fs(path)
-	if err != nil {
-		return nil, err
-	}
-	return child.Stat(file)
 }
 
 func (fs *Domainfs) ReadDir(path string) (ffs.Dir, error) {
-	if path == "/" {
+	switch path {
+	case "/":
 		return fs.map2dir(), nil
+	default:
+		child, file, err := fs.path2fs(path)
+		if err != nil {
+			return nil, err
+		}
+		return child.ReadDir(file)
 	}
-	child, file, err := fs.path2fs(path)
-	if err != nil {
-		return nil, err
-	}
-	return child.ReadDir(file)
 }
 
 func (fs *Domainfs) Open(path string, mode int) (interface{}, error) {
