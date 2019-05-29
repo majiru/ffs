@@ -19,6 +19,6 @@ func (fs *Diskfs) ReadDir(name string) (ffs.Dir, error) {
 	return os.Open(path.Join(fs.Root, name))
 }
 
-func (fs *Diskfs) Open(name string, mode int) (file interface{}, err error) {
+func (fs *Diskfs) Open(name string, mode int) (interface{}, error) {
 	return os.Open(path.Join(fs.Root, name))
 }
