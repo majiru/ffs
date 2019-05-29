@@ -281,7 +281,7 @@ func (d *Dir) WalkForFile(fpath string) (*File, error) {
 		return nil, err
 	} else {
 		if f, ok := fi.Sys().(*File); ok {
-			return f, nil
+			return f.Dup(), nil
 		} else {
 			return nil, errors.New("fsutil.Dir.WalkForFile: cast to File Failed")
 		}
@@ -293,7 +293,7 @@ func (d *Dir) WalkForDir(fpath string) (*Dir, error) {
 		return nil, err
 	} else {
 		if d, ok := fi.Sys().(*Dir); ok {
-			return d, nil
+			return d.Dup(), nil
 		} else {
 			return nil, errors.New("fsutil.Dir.WalkForFile: cast to Dir Failed")
 		}
