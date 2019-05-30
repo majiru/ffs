@@ -51,9 +51,10 @@ func (fs *MKVfs) decode() (err error) {
 func (fs *MKVfs) check() (err error){
 	fs.Lock()
 	if fs.rawpath.Stats.ModTime().After(fs.lastupdate) {
-		log.Println("Doing update")
+		log.Println("Updating tree")
+		err = fs.decode()
 		fs.Unlock()
-		return fs.decode()
+		return
 	}
 	fs.Unlock()
 	return
