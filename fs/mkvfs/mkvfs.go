@@ -20,6 +20,7 @@ type MKVfs struct {
 	rawpath *fsutil.File
 	p *TreeParser
 	lastupdate time.Time
+	mkv *os.File
 }
 
 func NewMKVfs() *MKVfs {
@@ -29,22 +30,27 @@ func NewMKVfs() *MKVfs {
 		fsutil.CreateFile([]byte(""), 0644, "mkv"),
 		nil,
 		time.Time{},
+		nil,
 	}
 	m.lastupdate = m.rawpath.Stats.ModTime()
-	m.root = fsutil.CreateDir("/", m.rawpath.Stats)
-	m.p = NewTreeParser(m.root)
+	contents := fsutil.CreateDir("contents")
+	m.root = fsutil.CreateDir("/", m.rawpath.Stats, contents.Stats)
+	m.p = NewTreeParser(contents)
 	return &m
 }
 
 func (fs *MKVfs) decode() (err error) {
 	var b []byte
 	fs.rawpath.Seek(0, io.SeekStart)
-	b, err = ioutil.ReadAll(fs.rawpath)
-	if err != nil {
+	if b, err = ioutil.ReadAll(fs.rawpath); err != nil {
 		return
 	}
-	err = mkvparse.ParsePath(strings.TrimSuffix(string(b), "\n"), fs.p)
+	if fs.mkv, err = os.Open(strings.TrimSuffix(string(b), "\n")); err != nil {
+		return
+	}
+	err = mkvparse.Parse(fs.mkv, fs.p)
 	fs.lastupdate = fs.rawpath.Stats.ModTime()
+	fs.mkv.Close()
 	return
 }
 
