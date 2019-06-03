@@ -1,7 +1,6 @@
 package mkvfs
 
 import (
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"strconv"
@@ -98,74 +97,38 @@ func (p *TreeParser) HandleMasterEnd(id mkvparse.ElementID, info mkvparse.Elemen
 	return nil
 }
 
-func (p *TreeParser) HandleString(id mkvparse.ElementID, value string, info mkvparse.ElementInfo) error {
+func formatinfo(info *mkvparse.ElementInfo) string {
+	return strconv.FormatInt(info.Offset, 10) + " " + strconv.FormatInt(info.Size, 10)
+}
+
+func (p *TreeParser) write(id *mkvparse.ElementID, info *mkvparse.ElementInfo) error {
 	if p.cur == nil {
 		return parseError("Orphaned element")
 	}
-	name, err := genunique(p.cur, mkvparse.NameForElementID(id))
+	name, err := genunique(p.cur, mkvparse.NameForElementID(*id))
 	if err != nil {
 		return err
 	}
-	p.cur.Append(fsutil.CreateFile([]byte(value), 0644, name).Stats)
+	p.cur.Append(fsutil.CreateFile([]byte(formatinfo(info)), 0644, name).Stats)
 	return nil
+}
+
+func (p *TreeParser) HandleString(id mkvparse.ElementID, value string, info mkvparse.ElementInfo) error {
+	return p.write(&id, &info)
 }
 
 func (p *TreeParser) HandleInteger(id mkvparse.ElementID, value int64, info mkvparse.ElementInfo) error {
-	if p.cur == nil {
-		return parseError("Orphaned element")
-	}
-	name, err := genunique(p.cur, mkvparse.NameForElementID(id))
-	if err != nil {
-		return err
-	}
-	newdir := fsutil.CreateDir(name)
-	raw := fsutil.CreateFile([]byte(""), 0644, "raw")
-	if err := binary.Write(raw, binary.BigEndian, value); err != nil {
-		return err
-	}
-	newdir.Append(fsutil.CreateFile([]byte(strconv.FormatInt(value, 10)), 0644, "str").Stats, raw.Stats)
-	p.cur.Append(newdir.Stats)
-	return nil
+	return p.write(&id, &info)
 }
 
 func (p *TreeParser) HandleFloat(id mkvparse.ElementID, value float64, info mkvparse.ElementInfo) error {
-	if p.cur == nil {
-		return parseError("Orphaned element")
-	}
-	name, err := genunique(p.cur, mkvparse.NameForElementID(id))
-	if err != nil {
-		return err
-	}
-	newdir := fsutil.CreateDir(name)
-	raw := fsutil.CreateFile([]byte(""), 0644, "raw")
-	if err := binary.Write(raw, binary.BigEndian, value); err != nil {
-		return err
-	}
-	newdir.Append(fsutil.CreateFile([]byte(strconv.FormatFloat(value, 'E', -1, 64)), 0644, "str").Stats, raw.Stats)
-	p.cur.Append(newdir.Stats)
-	return nil
+	return p.write(&id, &info)
 }
 
 func (p *TreeParser) HandleDate(id mkvparse.ElementID, value time.Time, info mkvparse.ElementInfo) error {
-	if p.cur == nil {
-		return parseError("Orphaned element")
-	}
-	name, err := genunique(p.cur, mkvparse.NameForElementID(id))
-	if err != nil {
-		return err
-	}
-	p.cur.Append(fsutil.CreateFile([]byte(value.String()), 0644, name).Stats)
-	return nil
+	return p.write(&id, &info)
 }
 
 func (p *TreeParser) HandleBinary(id mkvparse.ElementID, value []byte, info mkvparse.ElementInfo) error {
-	if p.cur == nil {
-		return parseError("Orphaned element")
-	}
-	name, err := genunique(p.cur, mkvparse.NameForElementID(id))
-	if err != nil {
-		return err
-	}
-	p.cur.Append(fsutil.CreateFile(value, 0644, name).Stats)
-	return nil
+	return p.write(&id, &info)
 }
