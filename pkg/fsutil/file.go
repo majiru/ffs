@@ -16,11 +16,11 @@ type Stat struct {
 	name string
 	time time.Time
 	size int64
-	file interface{}
+	File interface{}
 }
 
 func (s Stat) Name() string     { return s.name }
-func (s Stat) Sys() interface{} { return s.file }
+func (s Stat) Sys() interface{} { return s.File }
 
 func (s Stat) ModTime() time.Time { return s.time }
 
@@ -29,7 +29,7 @@ func (s Stat) Mode() os.FileMode { return s.perm }
 func (s Stat) IsDir() bool { return s.perm.IsDir() }
 
 func (s Stat) Size() int64 {
-	if f, ok := s.file.(interface{ Size() int64 }); ok {
+	if f, ok := s.File.(interface{ Size() int64 }); ok {
 		return f.Size()
 	}
 	return s.size
@@ -161,6 +161,10 @@ func (f *File) Truncate(size int64) error {
 func (f *File) Dup() *File {
 	new := *f
 	return &new
+}
+
+func (f *File) SeekPos() int64 {
+	return f.i
 }
 
 //CreateFile creates a new File struct.
