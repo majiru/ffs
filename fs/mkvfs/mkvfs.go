@@ -1,15 +1,12 @@
 package mkvfs
 
 import (
-	"io"
-	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/majiru/ffs"
+	"github.com/majiru/ffs/pkg/chanfile"
 	"github.com/majiru/ffs/pkg/fsutil"
 	"github.com/remko/go-mkvparse"
 )
@@ -17,59 +14,56 @@ import (
 type MKVfs struct {
 	*sync.RWMutex
 	root *fsutil.Dir
-	rawpath *fsutil.File
+	path *chanfile.File
 	p *TreeParser
-	lastupdate time.Time
 	mkv *os.File
 }
 
 func NewMKVfs() *MKVfs {
-	m := MKVfs{
+	m := &MKVfs{
 		&sync.RWMutex{},
 		nil,
-		fsutil.CreateFile([]byte(""), 0644, "mkv"),
+		chanfile.CreateFile([]byte(""), 0644, "mkv"),
 		nil,
-		time.Time{},
 		nil,
 	}
-	m.lastupdate = m.rawpath.Stats.ModTime()
 	contents := fsutil.CreateDir("contents")
-	m.root = fsutil.CreateDir("/", m.rawpath.Stats, contents.Stats)
+	m.root = fsutil.CreateDir("/", m.path.Content.Stats, contents.Stats)
 	m.p = NewTreeParser(contents)
-	return &m
+	go m.pathproc()
+	return m
 }
 
-func (fs *MKVfs) decode() (err error) {
-	var b []byte
-	fs.rawpath.Seek(0, io.SeekStart)
-	if b, err = ioutil.ReadAll(fs.rawpath); err != nil {
-		return
-	}
-	if fs.mkv, err = os.Open(strings.TrimSuffix(string(b), "\n")); err != nil {
+func (fs *MKVfs) decode(fpath string) (err error) {
+	fs.Lock()
+	defer fs.Unlock()
+	if fs.mkv, err = os.Open(strings.TrimSuffix(fpath, "\n")); err != nil {
 		return
 	}
 	err = mkvparse.Parse(fs.mkv, fs.p)
-	fs.lastupdate = fs.rawpath.Stats.ModTime()
 	fs.mkv.Close()
 	return
 }
 
-func (fs *MKVfs) check() (err error){
-	fs.Lock()
-	if fs.rawpath.Stats.ModTime().After(fs.lastupdate) {
-		log.Println("Updating tree")
-		err = fs.decode()
-		fs.Unlock()
-		return
+func (fs *MKVfs) pathproc() {
+	for {
+		m := <- fs.path.Req
+		switch(m.Type) {
+		case chanfile.Read:
+			fs.path.Recv <- chanfile.RecvMsg{chanfile.Commit, nil}
+		case chanfile.Write:
+			fs.path.Recv <- chanfile.RecvMsg{chanfile.Commit, fs.decode(string(m.Content))}
+		case chanfile.Trunc:
+			fs.path.Recv <- chanfile.RecvMsg{chanfile.Commit, nil}
+		case chanfile.Close:
+			fs.path.Recv <- chanfile.RecvMsg{chanfile.Commit, nil}
+		}
 	}
-	fs.Unlock()
-	return
 }
 
 func (fs *MKVfs) Stat(fpath string) (os.FileInfo, error) {
-	if err := fs.check(); err != nil {
-		return nil, err
-	}
+	fs.RLock()
+	defer fs.RUnlock()
 	switch fpath {
 	case "/":
 		return fs.root.Stat()
@@ -79,9 +73,8 @@ func (fs *MKVfs) Stat(fpath string) (os.FileInfo, error) {
 }
 
 func (fs *MKVfs) ReadDir(fpath string) (ffs.Dir, error) {
-	if err := fs.check(); err != nil {
-		return nil, err
-	}
+	fs.RLock()
+	defer fs.RUnlock()
 	switch fpath {
 	case "/":
 		return fs.root.Dup(), nil
@@ -91,8 +84,12 @@ func (fs *MKVfs) ReadDir(fpath string) (ffs.Dir, error) {
 }
 
 func (fs *MKVfs) Open(fpath string, mode int) (interface{}, error) {
-	if err := fs.check(); err != nil {
-		return nil, err
+	fs.RLock()
+	defer fs.RUnlock()
+	switch fpath {
+	case "/mkv":
+		return fs.path.Dup(), nil
+	default:
+		return fs.root.WalkForFile(fpath)
 	}
-	return fs.root.WalkForFile(fpath)
 }
