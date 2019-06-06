@@ -1,4 +1,4 @@
-# Fake File System(ffs)
+# Fake File System
 
 ## Purpose
 To create a simple interface for users to implement in memory filesystems.
@@ -8,12 +8,17 @@ Any struct that implementes the ffs.Fs interface detailed in ffs.go can make
 use of the server package to serve its files over HTTP and 9p.
 
 The fsutil package implements in-memory files that are compatible with the ffs.Writer
-and ffs.File interface. The os package's File is compatible with the ffs.File interface as well.
+and ffs.File interface. The *os.File struct also implements both of these as well.
 
-## Examples
-The diskfs package serves file from an arbitrary root path.
+## Filesystems
+* Diskfs: Serve arbitrary folder from the host OS.
+* Pastefs: A fileserver for saving and sharing text snippets.
+* MKVfs: Creates files and folders for exploring mkv file structure.
+* Domainfs: Mux's between sub filesystem based on http header, or folders over 9p.
+* Mediafs: Filesystem counterpart to [anidb2json](https://github.com/majiru/anidb2json).
 
-The domainfs package switches sub file systems based on the requested http host.
+## Example
+`cmd/ffs/main.go` shows simple use of almost all filesystems, with limited command line configuration.
 
 ## Inspiration
 https://talks.golang.org/2012/10things.slide#8
