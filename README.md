@@ -16,6 +16,7 @@ and ffs.File interface. The *os.File struct also implements both of these as wel
 * MKVfs: Creates files and folders for exploring mkv file structure.
 * Domainfs: Mux's between sub filesystem based on http header, or folders over 9p.
 * Mediafs: Filesystem counterpart to [anidb2json](https://github.com/majiru/anidb2json).
+* Jukeboxfs: Parses directory to create file tree based on audio file metainfo
 
 ## Example
 `cmd/ffs/main.go` shows simple use of almost all filesystems, with limited command line configuration.
