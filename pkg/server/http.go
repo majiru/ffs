@@ -23,6 +23,7 @@ func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) 
 		http.Error(w, "Internal server error", 500)
 		return
 	}
+	err = content.Close()
 	return
 }
 
@@ -39,11 +40,13 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 		return
 	}
 	if r.Body == nil {
+		err = content.Close()
 		return
 	}
 	io.Copy(content, r.Body)
 	//Don't expect POSTS to end in new line
 	content.Write([]byte("\n"))
+	err = content.Close()
 	return
 }
 
