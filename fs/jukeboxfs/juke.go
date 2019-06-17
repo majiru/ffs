@@ -67,7 +67,6 @@ func (fs *Jukefs) updateMetadata() error {
 	})
 	wg.Wait()
 	fs.Unlock()
-	log.Println(len(fs.info))
 	return err
 }
 
