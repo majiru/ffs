@@ -20,6 +20,7 @@ type Mediafs struct {
 	Root     *fsutil.Dir
 	DB       *anidb.TitleDB
 	dbfile   *chanfile.File
+	searchfile *chanfile.File
 	homepage *fsutil.File
 }
 
@@ -29,6 +30,7 @@ func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 		fsutil.CreateDir("/"),
 		&anidb.TitleDB{},
 		chanfile.CreateFile([]byte(""), 0644, "db"),
+		chanfile.CreateFile([]byte(""), 0644, "search"),
 		fsutil.CreateFile([]byte(""), 0644, "index.html"),
 	}
 	if db != nil {
@@ -40,6 +42,7 @@ func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 		err = fs.update()
 	}
 	go fs.dbproc()
+	go fs.searchproc()
 	return
 }
 
@@ -100,6 +103,42 @@ func (fs *Mediafs) dbproc() {
 	}
 }
 
+func (fs *Mediafs) search(name string) []*anidb.Anime {
+	var result []*anidb.Anime
+	name = strings.ToLower(name)
+	fs.RLock()
+	for _, series := range fs.DB.Anime {
+		if strings.Contains(strings.ToLower(series.Name), name) {
+			result = append(result, series)
+		}
+	}
+	fs.RUnlock()
+	return result
+}
+
+func (fs *Mediafs) searchproc() {
+	for {
+		m := <-fs.searchfile.Req
+		switch m.Type {
+		case chanfile.Read:
+			fs.searchfile.Recv <- chanfile.RecvMsg{chanfile.Commit, nil}
+		case chanfile.Write:
+			parts := strings.Split(string(m.Content), "=")
+			if len(parts) != 2 {
+				fs.searchfile.Recv <- chanfile.RecvMsg{chanfile.Discard, nil}
+				continue
+			}
+			err := fs.genpage(fs.searchfile.Content, fs.search(parts[1]))
+			fs.searchfile.Content.Seek(0, io.SeekStart)
+			fs.searchfile.Recv <- chanfile.RecvMsg{chanfile.Discard, err}
+		case chanfile.Trunc:
+			fs.searchfile.Recv <- chanfile.RecvMsg{chanfile.Commit, nil}
+		case chanfile.Close:
+			fs.searchfile.Recv <- chanfile.RecvMsg{chanfile.Commit, nil}
+		}
+	}
+}
+
 func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
 	fs.RLock()
 	defer fs.RUnlock()
@@ -112,6 +151,8 @@ func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
 		return fs.homepage.Stat()
 	case "/db":
 		return fs.dbfile.Stat()
+	case "/search":
+		return fs.searchfile.Stat()
 	case "/":
 		return fs.Root.Stat()
 	default:
@@ -141,6 +182,8 @@ func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
 		return fs.homepage.Dup(), nil
 	case "/db":
 		return fs.dbfile.Dup(), nil
+	case "/search":
+		return fs.searchfile.Dup(), nil
 	default:
 		if f, err := fs.Root.WalkForFile(file); err != nil {
 			return nil, err

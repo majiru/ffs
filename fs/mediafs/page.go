@@ -105,6 +105,28 @@ const homepagetemplate = `
 	</head>
 	<body style="background-color:#777777">
 		<div class="container">
+			<form action="/search" method="post">
+				<div class="form-group">
+					<input name="search" class="form-control" id="search" placeholder="keyword">
+				</div>
+				<button type="submit" class="btn btn-primary">Search!</button>
+			</form>
+			<div>
+			<ul class="pagination justify-content-center">
+					{{- if .CanPrev -}}
+						<li class="page-item">
+					{{- else -}}
+						<li class="page-item disabled">
+					{{- end -}}
+					<a class="page-link" href="/page/{{.Prev}}.html">Previous</a></li>
+					{{- if .CanNext -}}
+						<li class="page-item">
+					{{- else -}}
+						<li class="page-item disabled">
+					{{- end -}}
+					<a class="page-link" href="/page/{{.Next}}.html">Next</a></li>
+				</ul>
+			</div>
 		<div class="card-columns">
 		{{range $ani := .Shows}}
 			<div class="card" style="background-color:#FFFFEA">
@@ -144,13 +166,13 @@ const homepagetemplate = `
 				{{- else -}}
 					<li class="page-item disabled">
 				{{- end -}}
-						<a class="page-link" href="/page/{{.Prev}}.html">Previous</a></li>
+				<a class="page-link" href="/page/{{.Prev}}.html">Previous</a></li>
 				{{- if .CanNext -}}
 					<li class="page-item">
 				{{- else -}}
 					<li class="page-item disabled">
 				{{- end -}}
-						<a class="page-link" href="/page/{{.Next}}.html">Next</a></li>
+				<a class="page-link" href="/page/{{.Next}}.html">Next</a></li>
 			</ul>
 		</div>
 		</div>
