@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"strings"
 
 	anidb "github.com/majiru/anidb2json"
 	"github.com/majiru/ffs"
@@ -71,7 +72,7 @@ func (fs *Mediafs) update() (err error) {
 		return
 	}
 	fs.updateTree()
-	err = fs.genpage(fs.homepage, fs.DB.Anime)
+	err = fs.genwindow(fs.homepage, fs.DB.Anime, 0)
 	fs.Unlock()
 	return
 }
@@ -102,6 +103,10 @@ func (fs *Mediafs) dbproc() {
 func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
 	fs.RLock()
 	defer fs.RUnlock()
+	if strings.HasPrefix(file, "/page") {
+		_, reqfile := path.Split(file)
+		return fsutil.CreateFile([]byte(""), 0644, reqfile).Stat()
+	}
 	switch file {
 	case "/index.html":
 		return fs.homepage.Stat()
@@ -128,6 +133,9 @@ func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
 func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
 	fs.RLock()
 	defer fs.RUnlock()
+	if strings.HasPrefix(file, "/page") {
+		return fs.handlePagination(file, fs.DB.Anime)
+	}
 	switch file {
 	case "/index.html":
 		return fs.homepage.Dup(), nil
