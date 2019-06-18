@@ -36,7 +36,7 @@ const homepagetemplate = `
 						<div class="list-group">
 							{{- with files $ani.Name -}}
 							{{- range . -}}
-							<a href="/{{$ani.Name}}/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
+							<a href="/shows/{{$ani.Name}}/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
 							{{- end -}}
 							{{- end -}}
 						</div>

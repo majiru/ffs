@@ -44,13 +44,14 @@ func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 }
 
 func (fs *Mediafs) updateTree() {
-	fs.Root = fsutil.CreateDir("/")
+	d := fsutil.CreateDir("shows")
+	fs.Root = fsutil.CreateDir("/", d.Stats)
 	for _, s := range fs.DB.Anime {
 		subdir := fsutil.CreateDir(s.Name)
 		for _, p := range s.Path {
 			subdir.Append(fsutil.CreateFile([]byte(p), 0644, path.Base(p)).Stats)
 		}
-		fs.Root.Append(subdir.Stats)
+		d.Append(subdir.Stats)
 	}
 }
 
@@ -58,7 +59,7 @@ func (fs *Mediafs) updateHomepage() (err error) {
 	t := template.New("homepage")
 	t.Funcs(template.FuncMap{
 		"files": func(name string) []os.FileInfo {
-			if dir, err := fs.Root.WalkForDir(name); err == nil {
+			if dir, err := fs.Root.WalkForDir(path.Join("/shows", name)); err == nil {
 				return dir.Copy()
 			}
 			return nil
