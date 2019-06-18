@@ -23,11 +23,10 @@ func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) 
 		http.Error(w, "Internal server error", 500)
 		return
 	}
-	err = content.Close()
 	return
 }
 
-func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string) (writer ffs.File, err error) {
+func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string) (content ffs.Writer, err error) {
 	file, err := srv.Fs.Open(path, os.O_RDWR|os.O_TRUNC)
 	content, ok := file.(ffs.Writer)
 	if !ok || err != nil {
@@ -40,13 +39,11 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 		return
 	}
 	if r.Body == nil {
-		err = content.Close()
 		return
 	}
 	io.Copy(content, r.Body)
 	//Don't expect POSTS to end in new line
 	content.Write([]byte("\n"))
-	err = content.Close()
 	return
 }
 
@@ -66,11 +63,13 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		content, err := srv.ReadHTTP(w, r, requestedFile)
 		if err == nil && content != nil {
 			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
+			content.Close()
 		}
 	case http.MethodPost:
 		content, err := srv.WriteHTTP(w, r, requestedFile)
 		if err == nil && content != nil {
 			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
+			content.Close()
 		}
 	}
 	return
