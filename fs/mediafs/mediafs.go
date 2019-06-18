@@ -2,7 +2,6 @@ package mediafs
 
 import (
 	"encoding/json"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
@@ -55,26 +54,6 @@ func (fs *Mediafs) updateTree() {
 	}
 }
 
-func (fs *Mediafs) updateHomepage() (err error) {
-	t := template.New("homepage")
-	t.Funcs(template.FuncMap{
-		"files": func(name string) []os.FileInfo {
-			if dir, err := fs.Root.WalkForDir(path.Join("/shows", name)); err == nil {
-				return dir.Copy()
-			}
-			return nil
-		},
-	})
-	t, err = t.Parse(homepagetemplate)
-	if err != nil {
-		return
-	}
-	fs.homepage.Truncate(1)
-	fs.homepage.Seek(0, io.SeekStart)
-	err = t.ExecuteTemplate(fs.homepage, "homepage", fs)
-	return
-}
-
 func (fs *Mediafs) updateDB() (err error) {
 	b, err := ioutil.ReadAll(fs.dbfile.Content)
 	if err != nil {
@@ -92,7 +71,7 @@ func (fs *Mediafs) update() (err error) {
 		return
 	}
 	fs.updateTree()
-	err = fs.updateHomepage()
+	err = fs.genpage(fs.homepage, fs.DB.Anime)
 	fs.Unlock()
 	return
 }

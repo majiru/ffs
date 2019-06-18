@@ -1,5 +1,35 @@
 package mediafs
 
+import (
+	"html/template"
+	"os"
+	"io"
+	"path"
+
+	anidb "github.com/majiru/anidb2json"
+	"github.com/majiru/ffs"
+)
+
+func (fs *Mediafs) genpage(f ffs.Writer, shows []*anidb.Anime) (err error) {
+	t := template.New("page")
+	t.Funcs(template.FuncMap{
+		"files": func(name string) []os.FileInfo {
+			if dir, err := fs.Root.WalkForDir(path.Join("/shows", name)); err == nil {
+				return dir.Copy()
+			}
+			return nil
+		},
+	})
+	t, err = t.Parse(homepagetemplate)
+	if err != nil {
+		return
+	}
+	f.Truncate(1)
+	f.Seek(0, io.SeekStart)
+	err = t.ExecuteTemplate(fs.homepage, "page", shows)
+	return
+}
+
 const homepagetemplate = `
 <!doctype html>
 <html lang="en">
@@ -14,7 +44,7 @@ const homepagetemplate = `
 	</head>
 	<body style="background-color:#777777">
 			<div class="container card-columns">
-			{{range $ani := .DB.Anime}}
+			{{range $ani := .}}
 				<div class="card" style="background-color:#FFFFEA">
 					<img class="card-img-top" src="https://img7-us.anidb.net/pics/anime/{{$ani.Picture}}" alt="{{$ani.Name}}" style="width:%10">
 					<div class="card-body">
