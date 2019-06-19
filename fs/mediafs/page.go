@@ -2,11 +2,11 @@ package mediafs
 
 import (
 	"html/template"
-	"os"
 	"io"
+	"os"
 	"path"
-	"strings"
 	"strconv"
+	"strings"
 
 	anidb "github.com/majiru/anidb2json"
 	"github.com/majiru/ffs"
@@ -16,8 +16,8 @@ import (
 const itemsPerPage = 20
 
 type Page struct {
-	Shows []*anidb.Anime
-	Prev, Next  int
+	Shows            []*anidb.Anime
+	Prev, Next       int
 	CanPrev, CanNext bool
 }
 
@@ -52,13 +52,13 @@ func (fs *Mediafs) genwindow(f ffs.Writer, shows []*anidb.Anime, pagenum int) (e
 	}
 	f.Truncate(1)
 	f.Seek(0, io.SeekStart)
-	page := Page{Prev: pagenum-1, Next: pagenum+1}
-	if (pagenum + 1) * itemsPerPage > len(shows) {
+	page := Page{Prev: pagenum - 1, Next: pagenum + 1}
+	if (pagenum+1)*itemsPerPage > len(shows) {
 		page.CanNext = false
-		page.Shows = shows[pagenum * itemsPerPage:]
+		page.Shows = shows[pagenum*itemsPerPage:]
 	} else {
 		page.CanNext = true
-		page.Shows = shows[pagenum * itemsPerPage:(pagenum + 1) * itemsPerPage]
+		page.Shows = shows[pagenum*itemsPerPage : (pagenum+1)*itemsPerPage]
 	}
 	if pagenum == 0 {
 		page.CanPrev = false
@@ -82,7 +82,7 @@ func (fs *Mediafs) handlePagination(req string, shows []*anidb.Anime) (ffs.Write
 		return nil, os.ErrNotExist
 	}
 	//If our current page doesn't have any items in it, we don't exist
-	if pagenum * itemsPerPage > len(shows) {
+	if pagenum*itemsPerPage > len(shows) {
 		return nil, os.ErrNotExist
 	}
 	content := fsutil.CreateFile([]byte(""), 0644, file)
@@ -135,12 +135,36 @@ const homepagetemplate = `
 					<h5 class="card-title">{{$ani.Name}}</h5>
 					<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}">Episodes</a>
 					<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}Desc">Synopsis</a>
+					<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}Staff">Staff</a>
+					<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}Tags">Tags</a>
 				</div>
 			</div>
 			<div class="modal fade" id="Modal{{.ID}}Desc" tabindex="-1" role="dialog" aria-labelledby="Modal{{.ID}}Desc" aria-hidden="true">
 				<div class="modal-dialog modal-content modal-body">
 				<center>
 				<p>{{$ani.Description}}</p>
+				</center>
+				</div>
+			</div>
+			<div class="modal fade" id="Modal{{.ID}}Staff" tabindex="-1" role="dialog" aria-labelledby="Modal{{.ID}}Staff" aria-hidden="true">
+				<div class="modal-dialog modal-content modal-body">
+				<center>
+					<div class="list-group">
+						{{- range .Creators -}}
+						<a href="/staff/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}, {{.Role}}</a>
+						{{- end -}}
+					</div>
+				</center>
+				</div>
+			</div>
+			<div class="modal fade" id="Modal{{.ID}}Tags" tabindex="-1" role="dialog" aria-labelledby="Modal{{.ID}}Tags" aria-hidden="true">
+				<div class="modal-dialog modal-content modal-body">
+				<center>
+					<div class="list-group">
+						{{- range .Tags -}}
+						<a href="/tags/{{.Name}}" class="list-group-item list-group-item-action">{{.Name}}</a>
+						{{- end -}}
+					</div>
 				</center>
 				</div>
 			</div>

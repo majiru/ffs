@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
-	"sync"
 	"strings"
+	"sync"
 
 	anidb "github.com/majiru/anidb2json"
 	"github.com/majiru/ffs"
@@ -17,21 +18,25 @@ import (
 
 type Mediafs struct {
 	*sync.RWMutex
-	Root     *fsutil.Dir
-	DB       *anidb.TitleDB
-	dbfile   *chanfile.File
+	Root       *fsutil.Dir
+	DB         *anidb.TitleDB
+	dbfile     *chanfile.File
 	searchfile *chanfile.File
-	homepage *fsutil.File
+	homepage   *fsutil.File
+	Tags       *fsutil.Dir
+	Staff      *fsutil.Dir
 }
 
 func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 	fs = &Mediafs{
 		&sync.RWMutex{},
-		fsutil.CreateDir("/"),
+		nil,
 		&anidb.TitleDB{},
 		chanfile.CreateFile([]byte(""), 0644, "db"),
 		chanfile.CreateFile([]byte(""), 0644, "search"),
 		fsutil.CreateFile([]byte(""), 0644, "index.html"),
+		nil,
+		nil,
 	}
 	if db != nil {
 		_, err = io.Copy(fs.dbfile.Content, db)
@@ -41,20 +46,51 @@ func NewMediafs(db io.ReadWriter) (fs *Mediafs, err error) {
 		fs.dbfile.Content.Seek(0, io.SeekStart)
 		err = fs.update()
 	}
+	fs.updateTree()
 	go fs.dbproc()
 	go fs.searchproc()
 	return
 }
 
 func (fs *Mediafs) updateTree() {
-	d := fsutil.CreateDir("shows")
-	fs.Root = fsutil.CreateDir("/", d.Stats)
+	shows := fsutil.CreateDir("shows")
+	fs.Tags = fsutil.CreateDir("tags")
+	fs.Staff = fsutil.CreateDir("staff")
+	fs.Root = fsutil.CreateDir("/", shows.Stats, fs.Tags.Stats, fs.Staff.Stats)
 	for _, s := range fs.DB.Anime {
 		subdir := fsutil.CreateDir(s.Name)
 		for _, p := range s.Path {
 			subdir.Append(fsutil.CreateFile([]byte(p), 0644, path.Base(p)).Stats)
 		}
-		d.Append(subdir.Stats)
+		shows.Append(subdir.Stats)
+		for _, t := range s.Tags {
+			switch _, err := fs.Tags.WalkForDir(t.Name); err {
+			case os.ErrNotExist:
+				fs.Tags.Append(fsutil.CreateDir(t.Name, subdir.Stats).Stats)
+			case nil:
+				fi, err := fs.Tags.Walk(t.Name)
+				if err != nil {
+					log.Fatal("Could not find", t.Name, err)
+				}
+				if d, ok := fi.Sys().(*fsutil.Dir); ok {
+					d.Append(subdir.Stats)
+				}
+			}
+		}
+		for _, c := range s.Creators {
+			switch _, err := fs.Staff.WalkForDir(c.Name); err {
+			case os.ErrNotExist:
+				fs.Staff.Append(fsutil.CreateDir(c.Name, subdir.Stats).Stats)
+			case nil:
+				fi, err := fs.Staff.Walk(c.Name)
+				if err != nil {
+					log.Fatal("Could not find", c.Name, err)
+				}
+				if d, ok := fi.Sys().(*fsutil.Dir); ok {
+					d.Append(subdir.Stats)
+				}
+			}
+		}
 	}
 }
 
@@ -139,21 +175,34 @@ func (fs *Mediafs) searchproc() {
 	}
 }
 
+func (fs *Mediafs) dir2slice(f *fsutil.Dir) []*anidb.Anime {
+	var result []*anidb.Anime
+	lookup := make(map[string]*anidb.Anime)
+	for _, show := range fs.DB.Anime {
+		lookup[show.Name] = show
+	}
+	for _, fi := range f.Copy() {
+		if show, ok := lookup[fi.Name()]; ok {
+			result = append(result, show)
+		}
+	}
+	return result
+}
+
 func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
 	fs.RLock()
 	defer fs.RUnlock()
-	if strings.HasPrefix(file, "/page") {
+	switch {
+	case strings.HasPrefix(file, "/page"):
 		_, reqfile := path.Split(file)
 		return fsutil.CreateFile([]byte(""), 0644, reqfile).Stat()
-	}
-	switch file {
-	case "/index.html":
+	case file == "/index.html":
 		return fs.homepage.Stat()
-	case "/db":
+	case file == "/db":
 		return fs.dbfile.Stat()
-	case "/search":
+	case file == "/search":
 		return fs.searchfile.Stat()
-	case "/":
+	case file == "/":
 		return fs.Root.Stat()
 	default:
 		return fs.Root.Walk(file)
@@ -174,15 +223,23 @@ func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
 func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
 	fs.RLock()
 	defer fs.RUnlock()
-	if strings.HasPrefix(file, "/page") {
+	switch {
+	case strings.HasPrefix(file, "/page"):
 		return fs.handlePagination(file, fs.DB.Anime)
-	}
-	switch file {
-	case "/index.html":
+	case strings.HasPrefix(file, "/tags"), strings.HasPrefix(file, "/staff"):
+		d, err := fs.Root.WalkForDir(file)
+		if err != nil {
+			return nil, err
+		}
+		f := fsutil.CreateFile([]byte(""), 0644, "index.html")
+		err = fs.genpage(f, fs.dir2slice(d))
+		f.Seek(0, io.SeekStart)
+		return f, nil
+	case file == "/index.html":
 		return fs.homepage.Dup(), nil
-	case "/db":
+	case file == "/db":
 		return fs.dbfile.Dup(), nil
-	case "/search":
+	case file == "/search":
 		return fs.searchfile.Dup(), nil
 	default:
 		if f, err := fs.Root.WalkForFile(file); err != nil {
