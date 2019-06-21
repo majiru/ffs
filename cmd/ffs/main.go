@@ -40,6 +40,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	f.Close()
 	domfs := conf2Domfs(conf)
 
 	srv := server.Server{domfs}
