@@ -31,7 +31,7 @@ type Config struct {
 }
 
 func genDefaultConf(f io.WriteSeeker) error {
-	webfs := &FSConf{"webfs", "www", []string{"./www"}, nil}
+	webfs := &FSConf{"diskfs", "www", []string{"./www"}, nil}
 	conf := Config{
 		false,
 		webfs,
@@ -58,7 +58,7 @@ func parseFSConf(c *FSConf) error {
 	var err error
 
 	switch c.Name {
-	case "webfs":
+	case "diskfs":
 		c.fs = &diskfs.Diskfs{c.Args[0]}
 	case "pastefs":
 		c.fs = pastefs.NewPastefs()
