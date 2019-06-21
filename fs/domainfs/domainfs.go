@@ -145,9 +145,11 @@ func (fs *Domainfs) hostPolicy(ctx context.Context, host string) error {
 	fs.RLock()
 	for k := range fs.domains {
 		if host == k {
+			fs.RUnlock()
 			return nil
 		}
 	}
+	fs.RUnlock()
 	return fmt.Errorf("domainfs.hostPolicy: Host %s is not authorized", host)
 }
 
