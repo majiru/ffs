@@ -20,7 +20,7 @@ type File struct {
 //CreateFile creates a new File struct.
 //The underlying Stats.Sys() points to the new File.
 func CreateFile(content []byte, mode os.FileMode, name string) *File {
-	f := File{&sync.RWMutex{}, &content, int64(len(content)), nil}
+	f := File{&sync.RWMutex{}, &content, 0, nil}
 	f.Stats = &Stat{mode, name, time.Now(), int64(len(content)), &f}
 	return &f
 }
