@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	"aqwari.net/net/styx"
@@ -46,7 +47,11 @@ func main() {
 	srv := server.Server{domfs}
 	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
 	styxServer.Addr = port9p
-	httpsSrv := domfs.HTTPSServer(porthttps, porthttp)
-	go httpsSrv.ListenAndServeTLS("", "")
+	if conf.ServeHTTPS {
+		httpsSrv := domfs.HTTPSServer(porthttps, porthttp)
+		go httpsSrv.ListenAndServeTLS("", "")
+	} else {
+		go http.ListenAndServe(porthttp, domfs)
+	}
 	log.Fatal(styxServer.ListenAndServe())
 }
