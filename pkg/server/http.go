@@ -41,9 +41,28 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 	if r.Body == nil {
 		return
 	}
-	io.Copy(content, r.Body)
-	//Don't expect POSTS to end in new line
-	content.Write([]byte("\n"))
+	//As a special case, POST requests that upload
+	//a file, instead write the first uploaded file
+	//BUG: This drops other form information.
+	if mr, err := r.MultipartReader(); err == nil {
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				return nil, nil
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			_, err = io.Copy(content, p)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+	_, err = io.Copy(content, r.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
 	return
 }
 
