@@ -119,10 +119,12 @@ func TestWriteConcur(t *testing.T) {
 func TestReadAt(t *testing.T) {
 	testStr := "Testing"
 	f := CreateFile([]byte(testStr), 0644, "test")
+	wg := sync.WaitGroup{}
+	wg.Add(20)
 	for i := 0; i < 10; i++ {
 		go func() {
 			buf := make([]byte, 1)
-			n, err := f.ReadAt(buf, 1)
+			n, err := f.ReadAt(buf, 0)
 			if err != nil {
 				t.Errorf("ReadAt returned err: %v", err)
 			}
@@ -130,8 +132,9 @@ func TestReadAt(t *testing.T) {
 				t.Errorf("ReadAt returned %d for 1 byte read", n)
 			}
 			if string(buf)[0] != testStr[0] {
-				t.Errorf("ReadAt did not grab the right content. Expected %v, got %v", string(buf)[0], testStr[0])
+				t.Errorf("ReadAt did not grab the right content. Expected %c, got %c", string(buf)[0], testStr[0])
 			}
+			wg.Done()
 		}()
 		go func() {
 			buf := make([]byte, 1)
@@ -149,13 +152,17 @@ func TestReadAt(t *testing.T) {
 			if string(buf)[0] != testStr[1] {
 				t.Errorf("ReadAt did not grab the right content. Expected %v, got %v", string(buf)[0], testStr[1])
 			}
+			wg.Done()
 		}()
 	}
+	wg.Wait()
 }
 
 func TestWriteAt(t *testing.T) {
 	testStr := []byte("Testing")
-	f := CreateFile([]byte(""), 0644, "test")
+	f := CreateFile([]byte(testStr), 0644, "test")
+	wg := sync.WaitGroup{}
+	wg.Add(len(testStr))
 	for i := range testStr {
 		go func() {
 			n, err := f.WriteAt([]byte{testStr[i]}, 1)
@@ -176,6 +183,8 @@ func TestWriteAt(t *testing.T) {
 			if string(buf)[0] != testStr[i] {
 				t.Errorf("ReadAt did not grab the right content. Expected %v, got %v", string(buf)[0], testStr[i])
 			}
+			wg.Done()
 		}()
 	}
+	wg.Wait()
 }
