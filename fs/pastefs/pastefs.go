@@ -62,7 +62,7 @@ func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
 	case "/new":
 		if mode&os.O_RDWR != 0 || mode&os.O_WRONLY != 0 || mode&os.O_TRUNC != 0 {
 			name := strconv.FormatInt(time.Now().Unix(), 10)
-			f := fsutil.CreateFile([]byte(""), 0777, name)
+			f := fsutil.CreateFile([]byte(name), 0777, name)
 			fi, _ := f.Stat()
 			fs.pastes.Append(fi)
 			return f, nil
