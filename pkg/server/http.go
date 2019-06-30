@@ -59,10 +59,6 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 			}
 		}
 	}
-	_, err = io.Copy(content, r.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
 	return
 }
 
@@ -88,6 +84,8 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		content, err := srv.WriteHTTP(w, r, requestedFile)
 		if err == nil && content != nil {
 			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
+			content.Seek(0, io.SeekStart)
+			io.Copy(content, r.Body)
 			content.Close()
 		}
 	}
