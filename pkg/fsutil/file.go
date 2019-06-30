@@ -29,7 +29,7 @@ func CreateFile(content []byte, mode os.FileMode, name string) *File {
 func (f File) Size() int64 { return int64(len(f.s)) }
 
 func (f *File) Grow(n int64) {
-	if int64(cap(f.s)) >= n {
+	if int64(len(f.s)) >= n {
 		return
 	}
 	new := make([]byte, n)
