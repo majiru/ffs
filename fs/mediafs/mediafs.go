@@ -181,6 +181,9 @@ func (fs *Mediafs) dir2slice(f *fsutil.Dir) []*anidb.Anime {
 	for _, show := range fs.DB.Anime {
 		lookup[show.Name] = show
 	}
+	if show, ok := lookup[f.Stats.Name()]; ok {
+		return []*anidb.Anime{show}
+	}
 	for _, fi := range f.Copy() {
 		if show, ok := lookup[fi.Name()]; ok {
 			result = append(result, show)
@@ -193,7 +196,8 @@ func (fs *Mediafs) Stat(file string) (os.FileInfo, error) {
 	fs.RLock()
 	defer fs.RUnlock()
 	switch {
-	case strings.HasPrefix(file, "/page"):
+	//Return stubs for html only sections of the site
+	case strings.HasPrefix(file, "/page"), strings.HasPrefix(file, "/bookmark"):
 		_, reqfile := path.Split(file)
 		return fsutil.CreateFile([]byte(""), 0644, reqfile).Stat()
 	case file == "/index.html":
@@ -220,21 +224,27 @@ func (fs *Mediafs) ReadDir(path string) (ffs.Dir, error) {
 	}
 }
 
+func (fs *Mediafs) createPageFromDir(dir string) (*fsutil.File, error) {
+	d, err := fs.Root.WalkForDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	f := fsutil.CreateFile([]byte(""), 0644, "index.html")
+	err = fs.genpage(f, fs.dir2slice(d))
+	f.Seek(0, io.SeekStart)
+	return f, nil
+}
+
 func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
 	fs.RLock()
 	defer fs.RUnlock()
 	switch {
 	case strings.HasPrefix(file, "/page"):
 		return fs.handlePagination(file, fs.DB.Anime)
+	case strings.HasPrefix(file, "/bookmark"):
+		return fs.createPageFromDir(strings.Replace(file, "/bookmark", "/shows", 1))
 	case strings.HasPrefix(file, "/tags"), strings.HasPrefix(file, "/staff"):
-		d, err := fs.Root.WalkForDir(file)
-		if err != nil {
-			return nil, err
-		}
-		f := fsutil.CreateFile([]byte(""), 0644, "index.html")
-		err = fs.genpage(f, fs.dir2slice(d))
-		f.Seek(0, io.SeekStart)
-		return f, nil
+		return fs.createPageFromDir(file)
 	case file == "/index.html":
 		return fs.homepage.Dup(), nil
 	case file == "/db":
