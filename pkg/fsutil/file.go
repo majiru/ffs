@@ -2,6 +2,7 @@
 package fsutil
 
 import (
+	"fmt"
 	"errors"
 	"io"
 	"os"
@@ -44,7 +45,7 @@ func (f *File) Write(b []byte) (n int, err error) {
 	f.Grow(int64(len(b)) + f.i)
 	n = copy(f.s[f.i:], b)
 	if n < len(b) {
-		return 0, errors.New("fsutil.File.Write: Bad Copy")
+		return 0, fmt.Errorf("fsutil.File.Write: Bad Copy, wrote %d, expected to write %d", n, len(b))
 	}
 	f.i += int64(n)
 	return
@@ -60,7 +61,7 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 	f.Grow(int64(len(b)) + off)
 	n = copy(f.s[off:], b)
 	if n < len(b) {
-		return 0, errors.New("fsutil.File.WriteAt: Bad Copy")
+		return 0, fmt.Errorf("fsutil.File.WriteAt: Bad Copy, wrote %d, expected to write %d", n, len(b))
 	}
 	return
 }
