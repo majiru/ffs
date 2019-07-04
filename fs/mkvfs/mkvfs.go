@@ -16,7 +16,7 @@ type MKVfs struct {
 	root *fsutil.Dir
 	path *chanfile.File
 	p *TreeParser
-	mkv *os.File
+	d *Decoder
 }
 
 func NewMKVfs() *MKVfs {
@@ -25,10 +25,10 @@ func NewMKVfs() *MKVfs {
 		nil,
 		chanfile.CreateFile([]byte(""), 0644, "mkv"),
 		nil,
-		nil,
+		NewDecoder(),
 	}
 	contents := fsutil.CreateDir("contents")
-	m.root = fsutil.CreateDir("/", m.path.Content.Stats, contents.Stats)
+	m.root = fsutil.CreateDir("/", m.path.Content.Stats, contents.Stats, m.d.Block.Content.Stats, m.d.EBML.Content.Stats)
 	m.p = NewTreeParser(contents)
 	go m.pathproc()
 	return m
@@ -37,11 +37,13 @@ func NewMKVfs() *MKVfs {
 func (fs *MKVfs) decode(fpath string) (err error) {
 	fs.Lock()
 	defer fs.Unlock()
-	if fs.mkv, err = os.Open(strings.TrimSuffix(fpath, "\n")); err != nil {
+	if fs.d.f != nil {
+		fs.d.f.Close()
+	}
+	if fs.d.f, err = os.Open(strings.TrimSuffix(fpath, "\n")); err != nil {
 		return
 	}
-	err = mkvparse.Parse(fs.mkv, fs.p)
-	fs.mkv.Close()
+	err = mkvparse.Parse(fs.d.f, fs.p)
 	return
 }
 
@@ -89,6 +91,10 @@ func (fs *MKVfs) Open(fpath string, mode int) (interface{}, error) {
 	switch fpath {
 	case "/mkv":
 		return fs.path.Dup(), nil
+	case "/Block":
+		return fs.d.Block.Dup(), nil
+	case "/EBML":
+		return fs.d.EBML.Dup(), nil
 	default:
 		return fs.root.WalkForFile(fpath)
 	}
