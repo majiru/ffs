@@ -70,25 +70,34 @@ func (p *TreeParser) HandleMasterBegin(id mkvparse.ElementID, info mkvparse.Elem
 		newdir := fsutil.CreateDir(mkvparse.NameForElementID(id))
 		p.Root.Append(newdir.Stats)
 		p.cur = newdir
+		p.parent = &crumb{p.cur, nil}
+		p.lastlevel = 0
+		return true, nil
 	}
-	if info.Level > p.lastlevel {
-		p.parent = &crumb{p.cur, p.parent}
-		name, err := genunique(p.cur, mkvparse.NameForElementID(id))
-		if err != nil {
-			return false, err
+	switch {
+	case info.Level > p.lastlevel:
+		if info.Level != p.lastlevel+1 {
+			return false, parseError("Multi level descent")
 		}
-		newdir := fsutil.CreateDir(name)
-		p.cur.Append(newdir.Stats)
-		p.cur = newdir
-	} else if info.Level < p.lastlevel {
+		p.parent = &crumb{p.cur, p.parent}
+	case info.Level < p.lastlevel:
 		for i := p.lastlevel; i != info.Level; i-- {
 			if p.parent.parent == nil {
-				return false, parseError("Illegal climb")
+				return false, parseError("Illegal climb on " + mkvparse.NameForElementID(id))
 			}
-			p.cur = p.parent.dir
 			p.parent = p.parent.parent
 		}
+		fallthrough
+	default:
+		p.cur = p.parent.dir
 	}
+	name, err := genunique(p.cur, mkvparse.NameForElementID(id))
+	if err != nil {
+		return false, err
+	}
+	newdir := fsutil.CreateDir(name)
+	p.cur.Append(newdir.Stats)
+	p.cur = newdir
 	p.lastlevel = info.Level
 	return true, nil
 }
