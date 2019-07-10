@@ -94,14 +94,13 @@ func (fs *Mediafs) updateTree() {
 	}
 }
 
-func (fs *Mediafs) updateDB() (err error) {
+func (fs *Mediafs) updateDB() error {
+	fs.dbfile.Seek(0, io.SeekStart)
 	b, err := ioutil.ReadAll(fs.dbfile.Content)
 	if err != nil {
-		return
+		return err
 	}
-	fs.dbfile.Content.Seek(0, io.SeekStart)
-	err = json.Unmarshal(b, fs.DB)
-	return
+	return json.Unmarshal(b, fs.DB)
 }
 
 func (fs *Mediafs) update() (err error) {
@@ -116,11 +115,11 @@ func (fs *Mediafs) update() (err error) {
 	return
 }
 
-func (fs *Mediafs) Check() (err error) {
+func (fs *Mediafs) Check() (error) {
 	if fs.dbfile.Content.Stats.ModTime().After(fs.homepage.Stats.ModTime()) {
 		return fs.update()
 	}
-	return
+	return nil
 }
 
 func (fs *Mediafs) dbproc() {
