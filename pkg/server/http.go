@@ -80,13 +80,30 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
 			content.Close()
 		}
+	//Post expects the result to depend on what the user writes,
+	//so the input is sent to the content file before sending the file to the client
 	case http.MethodPost:
+		content, err := srv.WriteHTTP(w, r, requestedFile)
+		if err == nil && content != nil {
+			io.Copy(content, r.Body)
+			content.Seek(0, io.SeekStart)
+			if err = content.Close(); err != nil {
+				log.Fatal(err)
+			}
+			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
+		}
+	//Put expects the input to be reflected in the desired file.
+	//In this case the contents of the file are sent to the client before
+	//being overwritten.
+	case http.MethodPut:
 		content, err := srv.WriteHTTP(w, r, requestedFile)
 		if err == nil && content != nil {
 			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
 			content.Seek(0, io.SeekStart)
 			io.Copy(content, r.Body)
-			content.Close()
+			if err = content.Close(); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 	return

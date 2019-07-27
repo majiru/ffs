@@ -65,7 +65,12 @@ func TestStat(t *testing.T) {
 //ensurePaste posts a new paste and checks that the tree and content is correctly set
 func ensurePaste(t *testing.T, fs *Pastefs, URL string, content string) (pasteName string) {
 	new := fmt.Sprintf("%s/new", URL)
-	r, err := http.Post(new, "text/plain", strings.NewReader(content))
+	req, err := http.NewRequest("PUT", new, strings.NewReader(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &http.Client{}
+	r, err := c.Do(req)
 	if err != nil {
 		t.Errorf("Error performing /new POST: %q", err)
 	}
