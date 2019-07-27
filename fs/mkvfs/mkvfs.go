@@ -85,7 +85,7 @@ func (fs *MKVfs) ReadDir(fpath string) (ffs.Dir, error) {
 	}
 }
 
-func (fs *MKVfs) Open(fpath string, mode int) (interface{}, error) {
+func (fs *MKVfs) Open(fpath string, mode int) (ffs.File, error) {
 	fs.RLock()
 	defer fs.RUnlock()
 	switch fpath {

@@ -108,7 +108,7 @@ func (fs *Jukefs) ReadDir(fpath string) (ffs.Dir, error) {
 	}
 }
 
-func (fs *Jukefs) Open(fpath string, mode int) (interface{}, error) {
+func (fs *Jukefs) Open(fpath string, mode int) (ffs.File, error) {
 	fs.RLock()
 	defer fs.RUnlock()
 	f, err := fs.root.WalkForFile(fpath)

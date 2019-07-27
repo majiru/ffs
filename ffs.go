@@ -18,6 +18,7 @@ type File interface {
 
 //Writer represents a read/write file.
 //Truncate is required for satisfying os.O_TRUNC open mode and 9p Rtruncate.
+//os.File satisfies this interface.
 type Writer interface {
 	File
 	io.Writer
@@ -33,11 +34,10 @@ type Dir interface {
 }
 
 //Fs represents a filesystem.
-//Open should return a struct that satisfies File and/or Writer.
 //It is safe to assume ReadDir will only be called on directory paths.
 //Stat is used for both directories and files.
 type Fs interface {
-	Open(path string, mode int) (interface{}, error)
+	Open(path string, mode int) (File, error)
 	ReadDir(path string) (Dir, error)
 	Stat(path string) (os.FileInfo, error)
 }

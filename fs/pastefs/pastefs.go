@@ -53,7 +53,7 @@ func (fs *Pastefs) ReadDir(path string) (ffs.Dir, error) {
 	}
 }
 
-func (fs *Pastefs) Open(file string, mode int) (interface{}, error) {
+func (fs *Pastefs) Open(file string, mode int) (ffs.File, error) {
 	switch file {
 	case "/index.html":
 		f := fsutil.CreateFile([]byte(""), 0644, "/index.html")

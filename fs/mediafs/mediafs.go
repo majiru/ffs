@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 	"path"
-	"strings"
 	"sync"
+	"strings"
 
 	anidb "github.com/majiru/anidb2json"
 	"github.com/majiru/ffs"
@@ -234,7 +234,7 @@ func (fs *Mediafs) createPageFromDir(dir string) (*fsutil.File, error) {
 	return f, nil
 }
 
-func (fs *Mediafs) Open(file string, mode int) (interface{}, error) {
+func (fs *Mediafs) Open(file string, mode int) (ffs.File, error) {
 	fs.RLock()
 	defer fs.RUnlock()
 	switch {

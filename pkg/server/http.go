@@ -11,10 +11,9 @@ import (
 	"github.com/majiru/ffs"
 )
 
-func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) (content ffs.File, err error) {
-	file, err := srv.Fs.Open(path, os.O_RDONLY)
-	content, ok := file.(ffs.File)
-	if !ok || err != nil {
+func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) (file ffs.File, err error) {
+	file, err = srv.Fs.Open(path, os.O_RDONLY)
+	if err != nil {
 		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		if err == os.ErrNotExist {
 			http.NotFoundHandler().ServeHTTP(w, r)

@@ -119,7 +119,7 @@ func (fs *Domainfs) ReadDir(path string) (ffs.Dir, error) {
 	}
 }
 
-func (fs *Domainfs) Open(path string, mode int) (interface{}, error) {
+func (fs *Domainfs) Open(path string, mode int) (ffs.File, error) {
 	child, file, err := fs.path2fs(path)
 	if err != nil {
 		return nil, err
