@@ -35,37 +35,51 @@ func NewJukefs(root string) (*Jukefs, error) {
 	return fs, nil
 }
 
+type msg struct {
+	t tag.Metadata
+	s string
+}
+
 func (fs *Jukefs) updateMetadata() error {
 	fs.Lock()
-	l := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
-	err := filepath.Walk(fs.path, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			log.Println("Could not open file:", err)
-			return nil
+	parseout := make(chan msg, 4)
+	walkout := make(chan msg, 4)
+	go func() {
+		for i := range parseout {
+			fs.info[i.s] = i.t
 		}
+	}()
+	wg.Add(4)
+	for i := 0; i < 4; i++ {
+		go func(){
+			for j := range walkout {
+				f, err := os.Open(j.s)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				m, err := tag.ReadFrom(f)
+				f.Close()
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				j.t = m
+				parseout <- j
+			}
+			wg.Done()
+		}()
+	}
+	err := filepath.Walk(fs.path, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() && (strings.HasSuffix(info.Name(), "mp3") || strings.HasSuffix(info.Name(), "flac")) {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				f, openerr := os.Open(path)
-				if openerr != nil {
-					return
-				}
-				defer f.Close()
-				m, parseerr := tag.ReadFrom(f)
-				if parseerr != nil {
-					log.Println("File:", path, "Could not be parsed")
-					return
-				}
-				l.Lock()
-				fs.info[path] = m
-				l.Unlock()
-			}()
+			walkout <- msg{s: path}
 		}
 		return nil
 	})
+	close(walkout)
 	wg.Wait()
+	close(parseout)
 	fs.Unlock()
 	return err
 }
@@ -75,8 +89,13 @@ func (fs *Jukefs) updateTree() {
 	albums := make(map[string]*fsutil.Dir)
 	for k, v := range fs.info {
 		a := v.Album()
+		a = strings.Replace(a, "/", "", -1)
+		t := strings.Replace(v.Title(), "/", "", -1)
+		if a == "" {
+			a = "UNDEFINED"
+		}
 		if d, ok := albums[a]; ok {
-			d.Append(fsutil.CreateFile([]byte(k), 0644, v.Title()).Stats)
+			d.Append(fsutil.CreateFile([]byte(k), 0644, t).Stats)
 		} else {
 			newd := fsutil.CreateDir(a)
 			albums[a] = newd
