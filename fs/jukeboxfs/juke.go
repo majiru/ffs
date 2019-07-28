@@ -1,6 +1,7 @@
 package jukeboxfs
 
 import (
+	"html/template"
 	"io"
 	"io/ioutil"
 	"log"
@@ -97,7 +98,7 @@ func (fs *Jukefs) updateTree() {
 		if d, ok := albums[a]; ok {
 			d.Append(fsutil.CreateFile([]byte(k), 0644, t).Stats)
 		} else {
-			newd := fsutil.CreateDir(a)
+			newd := fsutil.CreateDir(a, fsutil.CreateFile([]byte(k), 0644, t).Stats)
 			albums[a] = newd
 			fs.root.Append(newd.Stats)
 		}
@@ -108,9 +109,11 @@ func (fs *Jukefs) updateTree() {
 func (fs *Jukefs) Stat(fpath string) (os.FileInfo, error) {
 	fs.RLock()
 	defer fs.RUnlock()
-	switch fpath {
-	case "/":
+	switch {
+	case fpath == "/":
 		return fs.root.Stat()
+	case strings.HasSuffix(fpath, "/index.html"):
+		return fsutil.CreateFile([]byte{}, 0644, "index.html").Stats, nil
 	default:
 		return fs.root.Walk(fpath)
 	}
@@ -130,15 +133,58 @@ func (fs *Jukefs) ReadDir(fpath string) (ffs.Dir, error) {
 func (fs *Jukefs) Open(fpath string, mode int) (ffs.File, error) {
 	fs.RLock()
 	defer fs.RUnlock()
-	f, err := fs.root.WalkForFile(fpath)
-	if err != nil {
-		return nil, err
+	switch {
+	case fpath == "/index.html":
+		f := fsutil.CreateFile([]byte{}, 0644, "index.html")
+		return f.Dup(), dir2html(f, fs.root.Copy())
+	case strings.HasSuffix(fpath, "/index.html"):
+		fpath = strings.TrimSuffix(fpath, "/index.html")
+		d, err := fs.root.WalkForDir(fpath)
+		if err != nil {
+			return nil, err
+		}
+		f := fsutil.CreateFile([]byte{}, 0644, "index.html")
+		return f.Dup(), dir2html(f, d.Copy())
+	default:
+		f, err := fs.root.WalkForFile(fpath)
+		if err != nil {
+			return nil, err
+		}
+		//These files store the path, not the file contents
+		f.Seek(0, io.SeekStart)
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+		return os.OpenFile(string(b), os.O_RDONLY, 0555)
 	}
-	//These files store the path, not the file contents
-	f.Seek(0, io.SeekStart)
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return os.OpenFile(string(b), os.O_RDONLY, 0555)
 }
+
+func dir2html(f ffs.Writer, fi []os.FileInfo) error {
+	t := template.New("page")
+	t, err := t.Parse(homepage)
+	if err != nil {
+		return err
+	}
+	return t.ExecuteTemplate(f, "page", fi)
+}
+
+const homepage = `
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Jukefs</title>
+	</head>
+	<body>
+		{{ range . }}
+		{{ if .IsDir }}
+		<a href="{{.Name}}/index.html">{{.Name}}</a>
+		{{ else }}
+		<a href="{{.Name}}">{{.Name}}</a>
+		{{ end }}
+		<br>
+		{{ end }}
+	</body>
+</html>
+`
