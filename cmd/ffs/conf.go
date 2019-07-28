@@ -72,18 +72,17 @@ func parseFSConf(c *FSConf) error {
 			return err
 		}
 		c.fs, err = mediafs.NewMediafs(nil)
-		return err
 	case "mkvfs":
 		c.fs = mkvfs.NewMKVfs()
 	case "jukefs", "jukeboxfs":
 		if len(c.Args) != 1 {
 			return errors.New("parseFSConf: Not enough/Too many args to jukeboxfs")
 		}
-		c.fs, err = jukeboxfs.NewJukefs(c.Args[1])
+		c.fs, err = jukeboxfs.NewJukefs(c.Args[0])
 	default:
 		return errors.New("parseFSConf: Unknown fs")
 	}
-	return nil
+	return err
 }
 
 func readConf(confFile io.ReadSeeker) (*Config, error) {
