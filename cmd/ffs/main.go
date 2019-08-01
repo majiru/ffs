@@ -8,6 +8,7 @@ import (
 
 	"aqwari.net/net/styx"
 	"github.com/majiru/ffs/pkg/server"
+	"github.com/majiru/aitm"
 )
 
 func main() {
@@ -40,18 +41,40 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	f.Close()
-	domfs := conf2Domfs(conf)
 
+	domfs := conf2Domfs(conf)
 	srv := server.Server{domfs}
 	styxServer.Handler = styx.HandlerFunc(srv.Serve9P)
 	styxServer.Addr = port9p
-	if conf.ServeHTTPS {
-		httpsSrv := domfs.HTTPSServer(porthttps, porthttp)
-		go httpsSrv.ListenAndServeTLS("", "")
-	} else {
-		go http.ListenAndServe(porthttp, domfs)
+
+	if conf.Database != "" {
+		f, err = os.Open(conf.Database)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
+
+	switch {
+	case conf.ServeHTTPS && conf.Database != "":
+		srv := aitm.WrapServer(domfs.HTTPSServer(porthttps, porthttp))
+		if err := srv.LoadUsers(f); err != nil {
+			log.Fatal(err)
+		}
+		go srv.ListenAndServeTLS("", "")
+	case conf.ServeHTTPS && conf.Database == "":
+		srv := domfs.HTTPSServer(porthttps, porthttp)
+		go srv.ListenAndServeTLS("", "")
+	case !conf.ServeHTTPS && conf.Database != "":
+		srv := aitm.WrapServer(&http.Server{Addr: porthttp, Handler: domfs})
+		if err := srv.LoadUsers(f); err != nil {
+			log.Fatal(err)
+		}
+		go srv.ListenAndServe()
+	case !conf.ServeHTTPS && conf.Database == "":
+		srv := &http.Server{Addr: porthttp, Handler: domfs}
+		go srv.ListenAndServe()
+	}
+
 	log.Fatal(styxServer.ListenAndServe())
 }

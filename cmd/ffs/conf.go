@@ -25,6 +25,7 @@ type FSConf struct {
 
 type Config struct {
 	ServeHTTPS bool
+	Database string
 	Base *FSConf
 	Doms []string
 	FS []*FSConf
@@ -34,6 +35,7 @@ func genDefaultConf(f io.WriteSeeker) error {
 	webfs := &FSConf{"diskfs", "www", []string{"./www"}, nil}
 	conf := Config{
 		false,
+		"",
 		webfs,
 		[]string{"localhost", "example.com"},
 		[]*FSConf{
