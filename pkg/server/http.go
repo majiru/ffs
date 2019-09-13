@@ -84,7 +84,9 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		content, err := srv.WriteHTTP(w, r, requestedFile)
 		if err == nil && content != nil {
-			io.Copy(content, r.Body)
+			content.Seek(0, io.SeekStart)
+			n, _ := io.Copy(content, r.Body)
+			content.Truncate(n)
 			content.Seek(0, io.SeekStart)
 			if err = content.Close(); err != nil {
 				log.Fatal(err)
