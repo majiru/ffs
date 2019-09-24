@@ -85,8 +85,7 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		content, err := srv.WriteHTTP(w, r, requestedFile)
 		if err == nil && content != nil {
 			content.Seek(0, io.SeekStart)
-			n, _ := io.Copy(content, r.Body)
-			content.Truncate(n)
+			io.Copy(content, r.Body)
 			content.Seek(0, io.SeekStart)
 			if err = content.Close(); err != nil {
 				log.Fatal(err)
@@ -101,7 +100,9 @@ func (srv Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err == nil && content != nil {
 			http.ServeContent(w, r, requestedFile, fi.ModTime(), content)
 			content.Seek(0, io.SeekStart)
-			io.Copy(content, r.Body)
+			n, _ := io.Copy(content, r.Body)
+			content.Truncate(n)
+			content.Seek(0, io.SeekStart)
 			if err = content.Close(); err != nil {
 				log.Fatal(err)
 			}
