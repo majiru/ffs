@@ -130,7 +130,7 @@ const homepagetemplate = `
 		<div class="card-columns">
 		{{range $ani := .Shows}}
 			<div class="card" style="background-color:#FFFFEA">
-				<img class="card-img-top" src="https://img7-us.anidb.net/pics/anime/{{$ani.Picture}}" alt="{{$ani.Name}}" style="width:%10">
+				<img class="card-img-top" src="https://cdn-us.anidb.net/images/main/{{$ani.Picture}}" alt="{{$ani.Name}}" style="width:%10">
 				<div class="card-body">
 					<h5 class="card-title">{{$ani.Name}}</h5>
 					<a href="#" class="btn btn-primary" data-toggle="modal" data-target="#Modal{{$ani.ID}}">Episodes</a>
