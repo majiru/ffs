@@ -19,22 +19,22 @@ const (
 )
 
 type ReqMsg struct {
-	Type int
+	Type   int
 	Offset int64
-	Len int64
+	Len    int64
 	//Only populated on writes
 	Content []byte
 }
 
 type RecvMsg struct {
 	Type int
-	Err error
+	Err  error
 }
 
 type File struct {
 	Content *fsutil.File
-	Req chan ReqMsg
-	Recv chan RecvMsg
+	Req     chan ReqMsg
+	Recv    chan RecvMsg
 }
 
 func CreateFile(content []byte, mode os.FileMode, name string) *File {
@@ -61,10 +61,9 @@ func (f *File) Dup() *File {
 	return &File{f.Content.Dup(), f.Req, f.Recv}
 }
 
-
 func (f *File) Write(b []byte) (int, error) {
 	f.Req <- ReqMsg{Write, f.Content.SeekPos(), int64(len(b)), b}
-	m := <- f.Recv
+	m := <-f.Recv
 	if m.Err != nil {
 		return 0, m.Err
 	}
@@ -76,7 +75,7 @@ func (f *File) Write(b []byte) (int, error) {
 
 func (f *File) WriteAt(b []byte, off int64) (int, error) {
 	f.Req <- ReqMsg{Write, off, int64(len(b)), b}
-	m := <- f.Recv
+	m := <-f.Recv
 	if m.Err != nil {
 		return 0, m.Err
 	}
@@ -88,7 +87,7 @@ func (f *File) WriteAt(b []byte, off int64) (int, error) {
 
 func (f *File) Truncate(size int64) error {
 	f.Req <- ReqMsg{Trunc, 0, size, nil}
-	m := <- f.Recv
+	m := <-f.Recv
 	if m.Err != nil {
 		return m.Err
 	}
@@ -100,7 +99,7 @@ func (f *File) Truncate(size int64) error {
 
 func (f *File) Read(b []byte) (int, error) {
 	f.Req <- ReqMsg{Read, f.Content.SeekPos(), int64(len(b)), nil}
-	m := <- f.Recv
+	m := <-f.Recv
 	if m.Err != nil {
 		return 0, m.Err
 	}
@@ -112,7 +111,7 @@ func (f *File) Read(b []byte) (int, error) {
 
 func (f *File) ReadAt(b []byte, off int64) (int, error) {
 	f.Req <- ReqMsg{Read, off, int64(len(b)), nil}
-	m := <- f.Recv
+	m := <-f.Recv
 	if m.Err != nil {
 		return 0, m.Err
 	}
@@ -133,7 +132,7 @@ func (f *File) Stat() (os.FileInfo, error) {
 
 func (f *File) Close() error {
 	f.Req <- ReqMsg{Close, 0, 0, nil}
-	m := <- f.Recv
+	m := <-f.Recv
 	if m.Err != nil {
 		return m.Err
 	}
