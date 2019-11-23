@@ -74,8 +74,10 @@ func (fs *Pastefs) Open(file string, mode int) (ffs.File, error) {
 }
 
 func NewPastefs() *Pastefs {
-	return &Pastefs{fsutil.CreateFile([]byte("Write to this file to paste\n"), 0777, "new"), fsutil.CreateDir("pastes")}
+	return &Pastefs{fsutil.CreateFile([]byte(pastepage), 0777, "new"), fsutil.CreateDir("pastes")}
 }
+
+const pastepage = "Write to this file to paste\n"
 
 const homepage = `
 <!DOCTYPE HTML>
