@@ -2,6 +2,7 @@ package fsutil
 
 import (
 	"io"
+	"os"
 	"sync"
 	"testing"
 )
@@ -187,4 +188,176 @@ func TestWriteAt(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestTruncate(t *testing.T) {
+	testStr := []byte("Testing")
+	f := CreateFile([]byte(testStr), 0644, "test")
+
+	err := f.Truncate(4)
+	if err != nil {
+		t.Fatal("Truncate returned error:", err)
+	}
+	b := make([]byte, 4)
+	n, err := f.ReadAt(b, 0)
+	if n != 4 {
+		t.Fatal("Truncate: short read")
+	}
+	if string(b) != "Testing"[:4] {
+		t.Fatal("Truncate: content mismatch")
+	}
+	err = f.Truncate(10)
+	if err != nil {
+		t.Fatal("Truncate returned error:", err)
+	}
+	if f.Size() != 10 {
+		t.Fatalf("expected %d got %d for Size after Truncate", 10, f.Size())
+	}
+}
+
+func TestSeekPos(t *testing.T) {
+	testStr := []byte("Testing")
+	f := CreateFile([]byte(testStr), 0644, "test")
+	if f.SeekPos() != 0 {
+		t.Fatal("SeekPos is not 0 at creation of file")
+	}
+	b := make([]byte, 3)
+	n, err := f.Read(b)
+	if err != nil {
+		t.Fatal("Read returned err:", err)
+	}
+	if n != 3 {
+		t.Fatal("short read")
+	}
+	if f.SeekPos() != 3 {
+		t.Fatalf("expected %d got %d for SeekPos after read", 3, f.SeekPos())
+	}
+	f2 := f.Dup()
+	n, err = f2.Read(b)
+	if err != nil {
+		t.Fatal("Read returned err:", err)
+	}
+	if n != 3 {
+		t.Fatal("short read")
+	}
+	if f2.SeekPos() != 6 {
+		t.Fatalf("expected %d got %d for SeekPos after read", 6, f.SeekPos())
+	}
+	if f.SeekPos() != 3 {
+		t.Fatalf("expected %d got %d for SeekPos after read", 3, f.SeekPos())
+	}
+}
+
+func TestClose(t *testing.T) {
+	testStr := []byte("Testing")
+	f := CreateFile([]byte(testStr), 0644, "test")
+	if f.SeekPos() != 0 {
+		t.Fatal("SeekPos is not 0 at creation of file")
+	}
+	b := make([]byte, 3)
+	n, err := f.Read(b)
+	if err != nil {
+		t.Fatal("Read returned err:", err)
+	}
+	if n != 3 {
+		t.Fatal("short read")
+	}
+	f2 := f.Dup()
+	err = f.Close()
+	if err != nil {
+		t.Fatal("Error returned err:", err)
+	}
+	if f.SeekPos() != 0 {
+		t.Fatalf("expected %d got %d for SeekPos after close", 0, f.SeekPos())
+	}
+	if f2.SeekPos() != 3 {
+		t.Fatalf("expected %d got %d for SeekPos after dup", 3, f.SeekPos())
+	}
+}
+
+func TestStats(t *testing.T) {
+	testStr := []byte("Testing")
+	f := CreateFile([]byte(testStr), 0644, "test")
+	s, err := f.Stat()
+	if err != nil {
+		t.Fatal("Stat returned err:", err)
+	}
+	if s.Mode() != 0644 {
+		t.Fatalf("expected %v got %v for Mode()", os.FileMode(0644), s.Mode())
+	}
+	if s.IsDir() != false {
+		t.Fatalf("expected %t got %t for IsDir()", false, true)
+	}
+	if s.Size() != int64(len(testStr)) {
+		t.Fatalf("expected %d got %d for Size()", s.Size(), len(testStr))
+	}
+}
+
+func TestSeek(t *testing.T) {
+	testStr := []byte("Testing")
+	f := CreateFile(testStr, 0644, "test")
+	_, err := f.Seek(-1, io.SeekStart)
+	if err != ErrNeg {
+		t.Fatalf("expected %v got %v for negative Seek()", ErrNeg, err)
+	}
+	_, err = f.Seek(0, 100)
+	if err != ErrInvalWhence {
+		t.Fatalf("expected %v got %v for bad whence in Seek()", ErrInvalWhence, err)
+	}
+	n, err := f.Seek(1, io.SeekCurrent)
+	if n != 1 {
+		t.Fatalf("moved %d bytes expected %d", n, 1)
+	}
+	if err != nil {
+		t.Fatal("got error from Seek:", err)
+	}
+	n, err = f.Seek(-1, io.SeekEnd)
+	if n != int64(len(testStr)-1) {
+		t.Fatalf("moved %d bytes expected %d", n, len(testStr)-1)
+	}
+	if err != nil {
+		t.Fatal("got error from Seek:", err)
+	}
+}
+
+func TestReadWriteEof(t *testing.T) {
+	testStr := []byte("Testing")
+	f := CreateFile(testStr, 0644, "test")
+	n, err := f.WriteAt([]byte{}, -1)
+	if err != ErrNeg {
+		t.Fatalf("expected %v got %v for negative WriteAt()", ErrNeg, err)
+	}
+	if n != 0 {
+		t.Fatalf("expected %d got %d for negative WriteAt()", 0, n)
+	}
+	n, err = f.ReadAt([]byte{}, -1)
+	if err != ErrNeg {
+		t.Fatalf("expected %v got %v for negative ReadAt()", ErrNeg, err)
+	}
+	if n != 0 {
+		t.Fatalf("expected %d got %d for negative ReadAt()", 0, n)
+	}
+	b := make([]byte, len(testStr)+1)
+	n, err = f.ReadAt(b, 0)
+	if err != io.EOF {
+		t.Fatalf("expected %v got %v for EOF ReadAt()", io.EOF, err)
+	}
+	if n != len(testStr) {
+		t.Fatalf("expected %d got %d for EOF ReadAt()", len(testStr), n)
+	}
+	f.Read(make([]byte, len(testStr)))
+	n, err = f.Read(b)
+	if err != io.EOF {
+		t.Fatalf("expected %v got %v for EOF Read()", io.EOF, err)
+	}
+	if n != 0 {
+		t.Fatalf("expected %d got %d for EOF Read()", 0, n)
+	}
+	n, err = f.ReadAt(b, int64(len(testStr)+1))
+	if err != io.EOF {
+		t.Fatalf("expected %v got %v for EOF ReadAt()", io.EOF, err)
+	}
+	if n != 0 {
+		t.Fatalf("expected %d got %d for EOF ReadAt()", 0, n)
+	}
 }
