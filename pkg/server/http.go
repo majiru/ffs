@@ -39,9 +39,6 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 		http.Error(w, "Internal server error", 500)
 		return
 	}
-	if r.Body == nil {
-		return
-	}
 	//As a special case, POST requests that upload
 	//a file, instead write the first uploaded file
 	//BUG: This drops other form information.
