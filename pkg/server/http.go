@@ -14,11 +14,12 @@ import (
 func (srv Server) ReadHTTP(w http.ResponseWriter, r *http.Request, path string) (file ffs.File, err error) {
 	file, err = srv.Fs.Open(path, os.O_RDONLY)
 	if err != nil {
-		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		if err == os.ErrNotExist {
+			log.Printf("fs stat returned %s exists but Open does not\n", path)
 			http.NotFoundHandler().ServeHTTP(w, r)
 			return
 		}
+		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		http.Error(w, "Internal server error", 500)
 		return
 	}
@@ -29,11 +30,12 @@ func (srv Server) WriteHTTP(w http.ResponseWriter, r *http.Request, path string)
 	file, err := srv.Fs.Open(path, os.O_RDWR|os.O_TRUNC)
 	content, ok := file.(ffs.Writer)
 	if !ok || err != nil {
-		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		if err == os.ErrNotExist {
+			log.Printf("fs stat returned %s exists but Open does not\n", path)
 			http.NotFoundHandler().ServeHTTP(w, r)
 			return
 		}
+		log.Println("Error: " + err.Error() + " for request " + r.URL.Path)
 		http.Error(w, "Internal server error", 500)
 		return
 	}
