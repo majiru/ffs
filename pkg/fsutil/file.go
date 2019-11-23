@@ -2,13 +2,16 @@
 package fsutil
 
 import (
-	"fmt"
 	"errors"
 	"io"
 	"os"
 	"sync"
 	"time"
 )
+
+var ErrNeg = errors.New("fsutil: negative offset")
+var ErrInvalWhence = errors.New("fsutil: invalid whence")
+var ErrBadCopy = errors.New("fsutil: bad copy")
 
 //File represents an in memory file.
 type File struct {
@@ -45,7 +48,7 @@ func (f *File) Write(b []byte) (n int, err error) {
 	f.Grow(int64(len(b)) + f.i)
 	n = copy((*f.s)[f.i:], b)
 	if n < len(b) {
-		return 0, fmt.Errorf("fsutil.File.Write: Bad Copy, wrote %d, expected to write %d", n, len(b))
+		panic(ErrBadCopy)
 	}
 	f.i += int64(n)
 	return
@@ -53,7 +56,7 @@ func (f *File) Write(b []byte) (n int, err error) {
 
 func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 	if off < 0 {
-		return 0, errors.New("fsutil.File.WriteAt: negative offset")
+		return 0, ErrNeg
 	}
 	f.Lock()
 	defer f.Unlock()
@@ -61,7 +64,7 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 	f.Grow(int64(len(b)) + off)
 	n = copy((*f.s)[off:], b)
 	if n < len(b) {
-		return 0, fmt.Errorf("fsutil.File.Write: Bad Copy, wrote %d, expected to write %d", n, len(b))
+		panic(ErrBadCopy)
 	}
 	return
 }
@@ -82,7 +85,7 @@ func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
 	defer f.RUnlock()
 	// cannot modify state - see io.ReaderAt
 	if off < 0 {
-		return 0, errors.New("fsutil.File.ReadAt: negative offset")
+		return 0, ErrNeg
 	}
 	if off >= int64(len(*f.s)) {
 		return 0, io.EOF
@@ -105,10 +108,10 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd:
 		abs = int64(len(*f.s)) + offset
 	default:
-		return 0, errors.New("fsutil.File.Seek: invalid whence")
+		return 0, ErrInvalWhence
 	}
 	if abs < 0 {
-		return 0, errors.New("fsutil.File.Seek: negative position")
+		return 0, ErrNeg
 	}
 	f.i = abs
 	return abs, nil
@@ -133,7 +136,7 @@ func (f *File) Truncate(size int64) error {
 	new := make([]byte, size)
 	n := copy(new, (*f.s)[:size])
 	if int64(n) != size {
-		return fmt.Errorf("fsutil.File.Write: Bad Copy, wrote %d, expected to write %d", n, size)
+		panic(ErrBadCopy)
 	}
 	*f.s = new
 	return nil
