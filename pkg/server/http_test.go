@@ -23,6 +23,16 @@ func testServer() *httptest.Server {
 	return httptest.NewUnstartedServer(Server{fs})
 }
 
+func testNotFoundServer() *httptest.Server {
+	fs := &NotFoundFs{}
+	return httptest.NewUnstartedServer(Server{fs})
+}
+
+func testErrServer() *httptest.Server {
+	fs := &ErrFs{}
+	return httptest.NewUnstartedServer(Server{fs})
+}
+
 func TestGET(t *testing.T) {
 	srv := testServer()
 	srv.Start()
@@ -37,6 +47,57 @@ func TestGET(t *testing.T) {
 	}
 	if string(b) != m1 {
 		t.Fatal("Content mismatch")
+	}
+}
+
+func TestNotFound(t *testing.T) {
+	srv := testServer()
+	srv.Start()
+	c := srv.Client()
+	resp, err := c.Get(srv.URL + "/notthere.html")
+	if err != nil {
+		t.Fatal("error performing get:", err)
+	}
+	if resp.StatusCode != 404 {
+		t.Fatal("expected 404 from resp, got:", resp.StatusCode)
+	}
+	srv.Close()
+	srv = testNotFoundServer()
+	srv.Start()
+	c = srv.Client()
+	resp, err = c.Get(srv.URL + "/notthere.html")
+	if err != nil {
+		t.Fatal("error performing get:", err)
+	}
+	if resp.StatusCode != 404 {
+		t.Fatal("expected 404 from resp, got:", resp.StatusCode)
+	}
+	resp, err = c.Post(srv.URL+"/index.html", "text/html; charset=UTF-8", nil)
+	if err != nil {
+		t.Fatal("error performing get:", err)
+	}
+	if resp.StatusCode != 404 {
+		t.Fatal("expected 404 from resp, got:", resp.StatusCode)
+	}
+}
+
+func TestServerError(t *testing.T) {
+	srv := testErrServer()
+	srv.Start()
+	c := srv.Client()
+	resp, err := c.Get(srv.URL + "/nothere.html")
+	if err != nil {
+		t.Fatal("error performing get:", err)
+	}
+	if resp.StatusCode != 500 {
+		t.Fatal("expected 500 from resp, got:", resp.StatusCode)
+	}
+	resp, err = c.Post(srv.URL+"/index.html", "text/html; charset=UTF-8", nil)
+	if err != nil {
+		t.Fatal("error performing get:", err)
+	}
+	if resp.StatusCode != 500 {
+		t.Fatal("expected 500 from resp, got:", resp.StatusCode)
 	}
 }
 
@@ -72,6 +133,28 @@ func TestPOST(t *testing.T) {
 	}
 	if string(b) != m2 {
 		t.Fatalf("content mismatch: saw %s, expected %s", string(b), m2)
+	}
+}
+
+func TestPostEmpty(t *testing.T) {
+	srv := testServer()
+	srv.Start()
+	c := srv.Client()
+	_, err := c.Post(srv.URL+"/index.html", "text/html; charset=UTF-8", nil)
+	if err != nil {
+		t.Fatal("Got error posting empty body:", err)
+	}
+	resp, err := c.Get(srv.URL + "/index.html")
+	if err != nil {
+		t.Fatal("Got error getting index:", err)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal("could not read resp:", err)
+	}
+	//First request should return original content
+	if string(b) != m1 {
+		t.Fatal("content mismatch")
 	}
 }
 
