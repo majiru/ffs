@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+var ErrCastFile = errors.New("cast to file failed")
+var ErrCastDir = errors.New("cast to dir failed")
+
 //Dir represents an in memory Directory.
 type Dir struct {
 	files []os.FileInfo
@@ -103,7 +106,7 @@ func (d *Dir) Walk(fpath string) (fi os.FileInfo, err error) {
 	}
 	for _, part := range parts[1:] {
 		if subdir, ok := fi.Sys().(*Dir); !ok {
-			return nil, errors.New("fsutil.Dir.Walk: cast to Dir failed")
+			return nil, ErrCastDir
 		} else {
 			if fi, err = subdir.Find(part); err != nil {
 				return nil, os.ErrNotExist
@@ -120,7 +123,7 @@ func (d *Dir) WalkForFile(fpath string) (*File, error) {
 		if f, ok := fi.Sys().(*File); ok {
 			return f.Dup(), nil
 		} else {
-			return nil, errors.New("fsutil.Dir.WalkForFile: cast to File Failed")
+			return nil, ErrCastFile
 		}
 	}
 }
@@ -132,7 +135,7 @@ func (d *Dir) WalkForDir(fpath string) (*Dir, error) {
 		if d, ok := fi.Sys().(*Dir); ok {
 			return d.Dup(), nil
 		} else {
-			return nil, errors.New("fsutil.Dir.WalkForFile: cast to Dir Failed")
+			return nil, ErrCastDir
 		}
 	}
 }
